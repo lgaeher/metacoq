@@ -102,42 +102,32 @@ Definition gc_of_constraint (uc : univ_constraint) : option GoodConstraintSet.t
      | (Level.Var n, Lt, Level.Var n') => singleton (gc_lt (mVar n) (mVar n'))
      end.
 
-Definition my_val0 (v : valuation) (l : my_level) : nat :=
+Definition gc_val0 (v : valuation) (l : gc_level) : nat :=
   match l with
   | mLevel s => Pos.to_nat (v.(valuation_mono) s)
   | mVar x => v.(valuation_poly) x
   end.
 
-Definition my_satisfies0 v (gc : good_constraint) : bool :=
+Definition gc_satisfies0 v (gc : good_constraint) : bool :=
   match gc with
-  | gc_le l l' => my_val0 v l <=? my_val0 v l'
-  | gc_lt l l' => my_val0 v l <? my_val0 v l'
+  | gc_le l l' => gc_val0 v l <=? gc_val0 v l'
+  | gc_lt l l' => gc_val0 v l <? gc_val0 v l'
   | gc_lt_set l => 0 <? v.(valuation_poly) l
   | gc_eq_set l => 0 =? v.(valuation_poly) l
   end.
 
-Inductive on_Some {A} (P : A -> Prop) : option A -> Prop :=
-| no_some : forall x, P x -> on_Some P (Some x).
+Definition gc_satisfies v : GoodConstraintSet.t -> bool :=
+  GoodConstraintSet.for_all (gc_satisfies0 v).
 
-Lemma on_Some_spec {A} (P : A -> Prop) z :
-  on_Some P z <-> exists x, z = Some x /\ P x.
-Proof.
-  split. intros []. now eexists.
-  intros [? [e ?]]. subst. now constructor.
-Qed.
-
-Definition my_satisfies v : GoodConstraintSet.t -> bool :=
-  GoodConstraintSet.for_all (my_satisfies0 v).
-
-Definition my_consistent ctrs : Prop := exists v, my_satisfies v ctrs.
+Definition gc_consistent ctrs : Prop := exists v, gc_satisfies v ctrs.
 
 Lemma if_true_false (b : bool) : (if b then true else false) = b.
   destruct b; reflexivity.
 Qed.
 
-Lemma my_satisfies_pair v gc1 gc2 :
-  (my_satisfies0 v gc1 /\ my_satisfies0 v gc2) <->
-  my_satisfies v (GoodConstraintSet_pair gc1 gc2).
+Lemma gc_satisfies_pair v gc1 gc2 :
+  (gc_satisfies0 v gc1 /\ gc_satisfies0 v gc2) <->
+  gc_satisfies v (GoodConstraintSet_pair gc1 gc2).
 Proof.
   cbn; destruct (GoodConstraintDec.eq_dec gc2 gc1); cbn;
     rewrite if_true_false.
@@ -151,19 +141,19 @@ Ltac gc_of_constraint_tac :=
   | |- is_true (_ <? _) => apply PeanoNat.Nat.ltb_lt
   | |- is_true (_ <=? _) => apply PeanoNat.Nat.leb_le
   | |- is_true (_ =? _) => apply PeanoNat.Nat.eqb_eq
-  | |- is_true (my_satisfies _ (GoodConstraintSet_pair _ _))
-               => apply my_satisfies_pair; cbn -[Nat.leb Nat.eqb]; split
+  | |- is_true (gc_satisfies _ (GoodConstraintSet_pair _ _))
+               => apply gc_satisfies_pair; cbn -[Nat.leb Nat.eqb]; split
   | H : is_true (if _ then true else false) |- _ => rewrite if_true_false in H
   | H : is_true (_ <? _) |- _ => apply PeanoNat.Nat.ltb_lt in H
   | H : is_true (_ <=? _) |- _ => apply PeanoNat.Nat.leb_le in H
   | H : is_true (_ =? _) |- _ => apply PeanoNat.Nat.eqb_eq in H
-  | H : is_true (my_satisfies _ (GoodConstraintSet_pair _ _)) |- _
-               => apply my_satisfies_pair in H; cbn -[Nat.leb Nat.eqb] in H;
+  | H : is_true (gc_satisfies _ (GoodConstraintSet_pair _ _)) |- _
+               => apply gc_satisfies_pair in H; cbn -[Nat.leb Nat.eqb] in H;
                  destruct H
   end.
 
 Lemma gc_of_constraint_spec v uc :
-  satisfies0 v uc <-> on_Some (my_satisfies v) (gc_of_constraint uc).
+  satisfies0 v uc <-> on_Some (gc_satisfies v) (gc_of_constraint uc).
 Proof.
   split.
   - destruct 1; destruct l, l'; try constructor; try reflexivity.
@@ -189,16 +179,16 @@ Lemma iff_forall {A} B C (H : forall x : A, B x <-> C x)
 Defined.
 
 Lemma gc_of_constraints_spec v ctrs :
-  satisfies v ctrs <-> on_Some (my_satisfies v) (gc_of_constraints ctrs).
+  satisfies v ctrs <-> on_Some (gc_satisfies v) (gc_of_constraints ctrs).
 Proof.
-  unfold my_satisfies, satisfies, ConstraintSet.For_all, gc_of_constraints.
+  unfold gc_satisfies, satisfies, ConstraintSet.For_all, gc_of_constraints.
   set (S := GoodConstraintSet.empty).
   rewrite ConstraintSet.fold_spec.
   etransitivity. eapply iff_forall.
   intro; eapply imp_iff_compat_r. eapply ConstraintSetFact.elements_iff.
   set (l := ConstraintSet.elements ctrs). simpl.
   transitivity ((forall uc, InA eq uc l -> satisfies0 v uc) /\
-                (forall gc, GoodConstraintSet.In gc S -> my_satisfies0 v gc)). {
+                (forall gc, GoodConstraintSet.In gc S -> gc_satisfies0 v gc)). {
     intuition. inversion H0. }
   clearbody S; revert S; induction l; intro S.
   - split.
@@ -250,9 +240,9 @@ Qed.
 
 (* vertices of the graph are levels which are not Prop *)
 (* ltv : level to vertice *)
-Inductive vertice := lSet | ltv (l : my_level).
+Inductive vertice := lSet | ltv (l : gc_level).
 
-Coercion ltv : my_level >-> vertice.
+Coercion ltv : gc_level >-> vertice.
 
 Module VerticeDec.
   Definition t : Set := vertice.
@@ -262,7 +252,7 @@ Module VerticeDec.
   Definition eq_sym : forall x y : t, eq x y -> eq y x := @eq_sym _.
   Definition eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z := @eq_trans _.
   Definition eq_dec : forall x y : t, {eq x y} + {~ eq x y}.
-    unfold eq. decide equality. apply GoodConstraintDec.my_level_dec. 
+    unfold eq. decide equality. apply GoodConstraintDec.gc_level_dec. 
   Defined.
   Definition eqb : t -> t -> bool := fun x y => if eq_dec x y then true else false.
 End VerticeDec.
@@ -280,7 +270,7 @@ Proof.
   rewrite H. apply rt_refl.
 Defined.
 
-Definition edge_of_level (l : my_level) : EdgeSet.elt :=
+Definition edge_of_level (l : gc_level) : EdgeSet.elt :=
   match l with
   | mLevel l => (lSet, 1, ltv (mLevel l))
   | mVar n => (lSet, 0, ltv (mVar n))
@@ -417,9 +407,9 @@ Section Spec.
 
   (* TODO: This proof should be better written *)
   Lemma make_graph_spec v :
-    my_satisfies v ctrs <-> correct_labelling G (labelling_of_valuation v).
+    gc_satisfies v ctrs <-> correct_labelling G (labelling_of_valuation v).
   Proof.
-    unfold my_satisfies, correct_labelling. split; intro H.
+    unfold gc_satisfies, correct_labelling. split; intro H.
     - split. now rewrite source_make_graph.
       intros e He. apply toto in He. induction He.
       + destruct H0 as [[]]; cbn in H0; subst; cbn; lia.
@@ -435,7 +425,7 @@ Section Spec.
           -- destruct m; subst; cbn in *; lia.
           -- destruct m0; subst; cbn in *; lia.
           -- specialize (H _ H1); cbn in H.
-             case_eq (my_val0 v m0). intro eq; rewrite eq in H.
+             case_eq (gc_val0 v m0). intro eq; rewrite eq in H.
              discriminate.
              intros n eq; rewrite eq in H.
              apply PeanoNat.Nat.leb_le in H.
@@ -465,7 +455,7 @@ Section Spec.
         destruct m, m0; cbn; apply PeanoNat.Nat.leb_le; lia.
       + inversion_clear Hgc. inversion_clear H1. inversion_clear H3.
         specialize (H _ H1); clear -H. cbn in *.
-        case_eq (my_val0 v m0); intro e.
+        case_eq (gc_val0 v m0); intro e.
         destruct m, m0; cbn in *; lia.
         intro ee. apply PeanoNat.Nat.leb_le.
         destruct m, m0; cbn in *; lia.
@@ -478,8 +468,8 @@ Section Spec.
 
 
   Corollary make_graph_spec' l :
-    (* my_satisfies (valuation_of_labelling l) ctrs <-> correct_labelling G l. *)
-    correct_labelling G l -> my_satisfies (valuation_of_labelling l) ctrs.
+    (* gc_satisfies (valuation_of_labelling l) ctrs <-> correct_labelling G l. *)
+    correct_labelling G l -> gc_satisfies (valuation_of_labelling l) ctrs.
   Proof.
     intro H. apply (make_graph_spec (valuation_of_labelling l)).
     unfold correct_labelling; intuition.
@@ -489,7 +479,7 @@ Section Spec.
   Qed.
 
   Corollary make_graph_spec2 :
-    my_consistent ctrs <-> exists l, correct_labelling G l.
+    gc_consistent ctrs <-> exists l, correct_labelling G l.
   Proof.
     split.
     - intros [v H]. exists (labelling_of_valuation v).

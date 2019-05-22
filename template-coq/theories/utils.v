@@ -1535,44 +1535,127 @@ Require Import Omega.
 
 (** * Non Empty List *)
 Module NEL.
-  Definition t (A : Set) := {l : list A & #|l| > 0}.
 
-  Program Definition map {A B : Set} (f : A -> B) : t A -> t B
-    := fun l => (List.map f l.1; _).
-  Next Obligation.
-    rewrite map_length. exact l.2.
-  Defined.
+  Inductive t (A : Set) :=
+  | sing : A -> t A
+  | cons : A -> t A -> t A.
 
-  Definition make {A} x l : t A
-    := (x :: l; gt_Sn_O _).
+  Arguments sing {A} _.
+  Arguments cons {A} _ _.
 
-  Definition cons {A} x (l : t A) : t A
-    := make x l.1.
+  Infix "::" := cons : nel_scope.
+  Notation "[ x ]" := (sing x) : nel_scope.
+  Delimit Scope nel_scope with nel.
+  Bind Scope nel_scope with t.
 
-  Definition eq {A} (l l' : t A)
-    : l.1 = l'.1 -> l = l'.
+  Local Open Scope nel_scope.
+
+  Fixpoint length {A} (l : t A) : nat :=
+    match l with
+    | [ _ ] => 1
+    | _ :: l' => S (length l')
+    end.
+
+  Notation "[ x ; y ; .. ; z ; e ]" :=
+    (cons x (cons y .. (cons z (sing e)) ..)) : nel_scope.
+
+  Fixpoint to_list {A} (l : t A) : list A :=
+    match l with
+    | [x] => [x]
+    | x :: l => x :: (to_list l)
+    end.
+
+  Fixpoint map {A B : Set} (f : A -> B) (l : t A) : t B :=
+    match l with
+    | [x] => [f x]
+    | x :: l => f x :: map f l
+    end.
+
+  Fixpoint app {A} (l l' : t A) : t A :=
+    match l with
+    | [x] => x :: l'
+    | x :: l => x :: (app l l')
+    end.
+
+  Infix "++" := app : nel_scope.
+
+  Fixpoint app_r {A : Set} (l : list A) (l' : t A) : t A :=
+    match l with
+    | [] => l'
+    | (x :: l)%list => x :: app_r l l'
+    end.
+
+  Fixpoint cons' {A : Set} (x : A) (l : list A) : t A :=
+    match l with
+    | [] => [x]
+    | (y :: l)%list => x :: cons' y l
+    end.
+
+  Lemma cons'_spec {A : Set} (x : A) l
+    : to_list (cons' x l) = (x :: l)%list.
   Proof.
-    destruct l as [l Hl], l' as [l' Hl']; cbn.
-    destruct 1. now rewrite (le_hset Hl Hl').
+    revert x; induction l; simpl.
+    reflexivity.
+    intro x; now rewrite IHl.
   Qed.
 
-  Program Definition app {A} (l l' : t A) : t A
-    := (l.1 ++ l'.1; _).
-  Next Obligation.
-    rewrite app_length. pose proof l.2. cbn in *. omega.
-  Qed.
+  Fixpoint fold_left {A} {B : Set} (f : A -> B -> A) (l : t B) (a0 : A) : A :=
+    match l with
+    | [b] => f a0 b
+    | b :: l => fold_left f l (f a0 b)
+    end.
 
-  Program Definition app_l {A} (l : t A) (l' : list A) : t A
-    := (l.1 ++ l'; _).
-  Next Obligation.
-    rewrite app_length. pose proof l.2. cbn in *. omega.
-  Qed.
+  Fixpoint forallb {A : Set} (f : A -> bool) (l : t A) :=
+    match l with
+    | [x] => f x
+    | hd :: tl => f hd && forallb f tl
+    end.
 
-  Program Definition app_r {A : Set} (l : list A) (l' : t A) : t A
-    := (l ++ l'.1; _).
-  Next Obligation.
-    rewrite app_length. pose proof l'.2. cbn in *. omega.
-  Qed.
+  Fixpoint forallb2 {A : Set} (f : A -> A -> bool) (l l' : t A) :=
+    match l, l' with
+    | [x], [x'] => f x x'
+    | hd :: tl, hd' :: tl' => f hd hd' && forallb2 f tl tl'
+    | _, _ => false
+    end.
+
+  (* Definition t (A : Set) := {l : list A & #|l| > 0}. *)
+
+  (* Program Definition map {A B : Set} (f : A -> B) : t A -> t B *)
+  (*   := fun l => (List.map f l.1; _). *)
+  (* Next Obligation. *)
+  (*   rewrite map_length. exact l.2. *)
+  (* Defined. *)
+
+  (* Definition make {A} x l : t A *)
+  (*   := (x :: l; gt_Sn_O _). *)
+
+  (* Definition cons {A} x (l : t A) : t A *)
+  (*   := make x l.1. *)
+
+  (* Definition eq {A} (l l' : t A) *)
+  (*   : l.1 = l'.1 -> l = l'. *)
+  (* Proof. *)
+  (*   destruct l as [l Hl], l' as [l' Hl']; cbn. *)
+  (*   destruct 1. now rewrite (le_hset Hl Hl'). *)
+  (* Qed. *)
+
+  (* Program Definition app {A} (l l' : t A) : t A *)
+  (*   := (l.1 ++ l'.1; _). *)
+  (* Next Obligation. *)
+  (*   rewrite app_length. pose proof l.2. cbn in *. omega. *)
+  (* Qed. *)
+
+  (* Program Definition app_l {A} (l : t A) (l' : list A) : t A *)
+  (*   := (l.1 ++ l'; _). *)
+  (* Next Obligation. *)
+  (*   rewrite app_length. pose proof l.2. cbn in *. omega. *)
+  (* Qed. *)
+
+  (* Program Definition app_r {A : Set} (l : list A) (l' : t A) : t A *)
+  (*   := (l ++ l'.1; _). *)
+  (* Next Obligation. *)
+  (*   rewrite app_length. pose proof l'.2. cbn in *. omega. *)
+  (* Qed. *)
 
 End NEL.
 

@@ -111,53 +111,53 @@ Module Universe.
   Definition t : Set := non_empty_list Expr.t.
 
   Definition equal (u1 u2 : t) : bool :=
-    forallb2 Expr.equal u1.1 u2.1.
+    NEL.forallb2 Expr.equal u1 u2.
 
   Definition make (l : Level.t) : t
-    := NEL.make (l, false) [].
+    := NEL.sing (l, false).
   (** Create a universe representing the given level. *)
 
   Definition make' (e : Expr.t) : t
-    := NEL.make e [].
+    := NEL.sing e.
 
   Definition make'' (e : Expr.t) (u : list Expr.t) : t
-    := NEL.make e u.
+    := NEL.cons' e u.
 
   (* FIXME: take duplicates in account *)
   Definition is_level (u : t) : bool :=
-    match u.1 with
-    | [e] => Expr.is_level e
+    match u with
+    | NEL.sing e => Expr.is_level e
     | _ => false
     end.
   (** Test if the universe is a level or an algebraic universe. *)
 
   Definition is_levels (u : t) : bool :=
-    forallb Expr.is_level u.1.
+    NEL.forallb Expr.is_level u.
   (** Test if the universe is a lub of levels or contains +n's. *)
 
   Definition level (u : t) : option Level.t :=
-    match u.1 with
-    | [(Level.lProp, _)] => Some Level.lProp
-    | [(l, false)] => Some l
+    match u with
+    | NEL.sing (Level.lProp, _) => Some Level.lProp
+    | NEL.sing (l, false) => Some l
     | _ => None
     end.
   (** Try to get a level out of a universe, returns [None] if it
       is an algebraic universe. *)
 
-  Definition levels (u : t) : list Level.t :=
-    LevelSet.elements (fold_left (fun s '(l, _) => LevelSet.add l s)
-                                 u.1 LevelSet.empty).
-  (** Get the levels inside the universe, forgetting about increments *)
+  (* Definition levels (u : t) : list Level.t := *)
+  (*   LevelSet.elements (NEL.fold_left (fun s '(l, _) => LevelSet.add l s) *)
+  (*                                u LevelSet.empty). *)
+  (* (** Get the levels inside the universe, forgetting about increments *) *)
 
-  (* FIXME: take duplicates in account *)
-  Definition is_small (u : t) : bool :=
-    match u.1 with
-    | [e] => Expr.is_small e
-    | _ => false
-    end.
+  (* (* FIXME: take duplicates in account *) *)
+  (* Definition is_small (u : t) : bool := *)
+  (*   match u.1 with *)
+  (*   | [e] => Expr.is_small e *)
+  (*   | _ => false *)
+  (*   end. *)
 
   Definition is_prop (u : t) : bool :=
-    forallb Expr.is_prop u.1.
+    NEL.forallb Expr.is_prop u.
 
   Definition type0m : t := make Level.prop.
   Definition type0 : t := make Level.set.
@@ -174,8 +174,8 @@ Module Universe.
   Definition sup (u1 u2 : t) : t := NEL.app u1 u2.
   (** The l.u.b. of 2 universes (naive because of duplicates) *)
 
-  Definition existsb (P : Expr.t -> bool) (u : t) : bool := existsb P u.1.
-  Definition for_all (P : Expr.t -> bool) (u : t) : bool := forallb P u.1.
+  (* Definition existsb (P : Expr.t -> bool) (u : t) : bool := NEL.existsb P u. *)
+  Definition for_all (P : Expr.t -> bool) (u : t) : bool := NEL.forallb P u.
 
   (** Type of product *)
   Definition sort_of_product (domsort rangsort : t) :=
@@ -186,10 +186,8 @@ Module Universe.
 End Universe.
 
 Definition universe := Universe.t.
-Definition universe_coercion : universe -> list Universe.Expr.t := @projT1 _ _.
+Definition universe_coercion : universe -> list Universe.Expr.t := NEL.to_list.
 Coercion universe_coercion : universe >-> list.
-
-Definition eq_universes (s1 s2 : universe) := NEL.eq s1 s2.
 
 Module ConstraintType.
   Inductive t : Set := Lt | Le | Eq.
@@ -344,15 +342,11 @@ Definition val1 v (e : Universe.Expr.t) : Z :=
   let n := val0 v (fst e) in
   if snd e then n + 1 else n.
 
-Program Definition val (v : valuation) (u : universe) : Z :=
-  match u.1 with
-  | [] => _
-  | e :: u => List.fold_left (fun n e => Z.max (val1 v e) n) u (val1 v e)
+Definition val (v : valuation) (u : universe) : Z :=
+  match u with
+  | NEL.sing e => val1 v e
+  | NEL.cons e u => NEL.fold_left (fun n e => Z.max (val1 v e) n) u (val1 v e)
   end.
-Next Obligation.
-  apply False_rect.
-  pose proof u.2. destruct Heq_anonymous. inversion H.
-Defined.
 
 Inductive satisfies0 (v : valuation) : univ_constraint -> Prop :=
 | satisfies0_Lt l l' : (val0 v l < val0 v l')%Z -> satisfies0 v (l, Lt, l')
@@ -405,9 +399,42 @@ Proof.
     [apply leq_universe0_refl|constructor].
 Qed.
 
-Conjecture leq_universe0_cons: forall φ s l, leq_universe0 φ s (NEL.cons l s).
-Conjecture leq_universe0_sup : forall φ s1 s2, leq_universe0 φ s2 (Universe.sup s1 s2).
-Conjecture leq_universe0_product_l : forall `{checker_flags} φ s1 s2,
-    leq_universe φ s1 (Universe.sort_of_product s1 s2).
-Conjecture leq_universe0_product_r : forall `{checker_flags} φ s1 s2,
-    leq_universe φ s2 (Universe.sort_of_product s1 s2).
+
+Lemma val_cons v e s
+  : val v (NEL.cons e s) = Z.max (val1 v e) (val v s).
+Proof.
+  cbn. generalize (val1 v e); clear e.
+  induction s.
+  intro; cbn. apply Z.max_comm.
+  intro; cbn in *. rewrite !IHs. Lia.lia.
+Defined.
+
+Lemma val_sup v s1 s2 :
+  val v (Universe.sup s1 s2) = Z.max (val v s1) (val v s2).
+Proof.
+  induction s1.
+  unfold Universe.sup, NEL.app. now rewrite val_cons.
+  change (Universe.sup (NEL.cons a s1) s2) with (NEL.cons a (Universe.sup s1 s2)).
+  rewrite !val_cons. rewrite IHs1. Lia.lia.
+Qed.
+
+Lemma leq_universe0_sup_l φ s1 s2 : leq_universe0 φ s1 (Universe.sup s1 s2).
+Proof.
+  intros v H. rewrite val_sup. Lia.lia.
+Qed.
+
+Lemma leq_universe0_sup_r φ s1 s2 : leq_universe0 φ s2 (Universe.sup s1 s2).
+Proof.
+  intros v H. rewrite val_sup. Lia.lia.
+Qed.
+
+Lemma leq_universe_product `{checker_flags} φ s1 s2
+  : leq_universe φ s2 (Universe.sort_of_product s1 s2).
+Proof.
+  unfold leq_universe; destruct check_univs; [cbn|constructor].
+  unfold Universe.sort_of_product; case_eq (Universe.is_prop s2); intro eq.
+  apply leq_universe0_refl.
+  apply leq_universe0_sup_r.
+Qed.
+
+(* Rk: [leq_universe φ s2 (sort_of_product s1 s2)] does not hold *)
