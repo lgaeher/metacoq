@@ -110,38 +110,46 @@ Module Nbar.
     destruct n. lia. intros _. eexists; reflexivity.
   Qed.
 
-  (* Definition finite_pos (n : t) := is_finite n /\ is_pos n. *)
-
-  Definition eq_0_max (n m : t)
-    : max n m = Some 0 -> n = Some 0 \/ m = Some 0.
+  Definition add_assoc n m p : n + (m + p) = n + m + p.
   Proof.
-    destruct n, m; cbn; intro H; try discriminate;
-    apply some_inj in H.
-    left. f_equal; lia.
-    left. now f_equal.
-    right. now f_equal.
-  Qed.
-  Definition eq_0_add (n m : t)
-    : add n m = Some 0 -> n = Some 0 /\ m = Some 0.
-  Proof.
-    destruct n, m; cbn; intro H; try discriminate.
-    apply some_inj in H; split; f_equal; lia.
-  Qed.
+    destruct n, m, p; try reflexivity; cbn.
+    now rewrite PeanoNat.Nat.add_assoc.
+  Defined.
 
-  Definition eq_max (n m k : t) : max n m = k -> n = k \/ m = k.
-    destruct n, m; cbn; intros []; intuition.
-    destruct (eq_max n n0 _ eq_refl); intuition.
-  Qed.
+  Definition add_0_r n : (n + Some 0 = n)%nbar.
+  Proof.
+    destruct n; try reflexivity; cbn.
+    now rewrite PeanoNat.Nat.add_0_r.
+  Defined.
+
+  Definition max_lub n m p : n <= p -> m <= p -> max n m <= p.
+  Proof.
+    destruct n, m, p; cbn; intuition.
+    lia.
+  Defined.
+
+  Definition add_max_distr_r n m p : max (n + p) (m + p) = max n m + p.
+  Proof.
+    destruct n, m, p; try reflexivity; cbn.
+    now rewrite PeanoNat.Nat.add_max_distr_r.
+  Defined.
+
+  Definition max_le' n m p : p <= n \/ p <= m -> p <= max n m.
+  Proof.
+    destruct n, m, p; cbn; intuition; lia.
+  Defined.
+
+  Definition plus_le_compat_l n m p : n <= m -> p + n <= p + m.
+  Proof.
+    destruct n, m, p; cbn; intuition.
+  Defined.
+
+  Definition max_idempotent n : max n n = n.
+  Proof.
+    destruct n; try reflexivity; cbn.
+    now rewrite PeanoNat.Nat.max_idempotent.
+  Defined.
 End Nbar.
-
-(* Definition wf_implies {A} (R R' : relation A) (H : inclusion _ R R') *)
-(*   : well_founded R' -> well_founded R. *)
-(* Proof. *)
-(*   intros HR x; specialize (HR x). *)
-(*   induction HR. *)
-(*   constructor. unfold inclusion in H. *)
-(*   firstorder. *)
-(* Qed. *)
 
 
 Module WeightedGraph (V : UsualDecidableType).
@@ -151,26 +159,51 @@ Module WeightedGraph (V : UsualDecidableType).
   Module VSetProp := WPropertiesOn V VSet.
   Module Edge.
     Definition t := (V.t * nat * V.t)%type.
-    Definition eq (e1 e2 : t) : Prop :=
-      let '(x1, n1, y1) := e1 in let '(x2, n2, y2) := e2 in
-      V.eq x1 x2 /\ n1 = n2 /\ V.eq y1 y2.
-    Definition eq_equiv : RelationClasses.Equivalence eq.
-    Admitted.
+    Definition eq : t -> t -> Prop := eq.
+    Definition eq_equiv : RelationClasses.Equivalence eq := _.
+    Definition eq_refl : forall x : t, eq x x := @eq_refl _.
+    Definition eq_sym : forall x y : t, eq x y -> eq y x := @eq_sym _.
+    Definition eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z := @eq_trans _.
     Definition eq_dec : forall x y : t, {eq x y} + {~ eq x y}.
-      intros [[x1 n1] y1] [[x2 n2] y2]; cbn.
-      destruct (V.eq_dec x1 x2). destruct (V.eq_dec y1 y2). 
-      destruct (Peano_dec.eq_nat_dec n1 n2).
-      left. intuition.
-      all: right; intuition.
+      unfold eq. decide equality. apply V.eq_dec.
+      decide equality. apply PeanoNat.Nat.eq_dec. apply V.eq_dec.
     Defined.
+    Definition eqb : t -> t -> bool := fun x y => if eq_dec x y then true else false.
+
+    (* Definition eq (e1 e2 : t) : Prop := *)
+    (*   let '(x1, n1, y1) := e1 in let '(x2, n2, y2) := e2 in *)
+    (*   V.eq x1 x2 /\ n1 = n2 /\ V.eq y1 y2. *)
+    (* Definition eq_equiv : RelationClasses.Equivalence eq. *)
+    (*   split. *)
+    (*   intros [[x n] y]; cbn; intuition. *)
+    (*   intros [[x n] y] [[x' n'] y']; cbn; intuition. *)
+    (*   intros [[x n] y] [[x' n'] y'] [[x'' n''] y'']; cbn; intuition. *)
+    (*   all: etransitivity; eassumption.  *)
+    (* Defined. *)
+    (* Definition eq_dec : forall x y : t, {eq x y} + {~ eq x y}. *)
+    (*   intros [[x1 n1] y1] [[x2 n2] y2]; cbn. *)
+    (*   destruct (V.eq_dec x1 x2). destruct (V.eq_dec y1 y2).  *)
+    (*   destruct (Peano_dec.eq_nat_dec n1 n2). *)
+    (*   left. intuition. *)
+    (*   all: right; intuition. *)
+    (* Defined. *)
   End Edge.
   Module EdgeSet:= MSets.MSetWeakList.Make Edge.
+  Module EdgeSetFact := WFactsOn Edge EdgeSet.
+  Module EdgeSetProp := WPropertiesOn Edge EdgeSet.
 
   Definition t := (VSet.t * EdgeSet.t * V.t)%type.
 
   Let V (G : t) := fst (fst G).
   Let E (G : t) := snd (fst G).
   Let s (G : t) := snd G.
+
+  Definition e_source : Edge.t -> V.t := fst ∘ fst.
+  Definition e_target : Edge.t -> V.t := snd.
+  Definition e_weight : Edge.t -> nat := snd ∘ fst.
+  Notation "x ..s" := (e_source x) (at level 3, format "x '..s'").
+  Notation "x ..t" := (e_target x) (at level 3, format "x '..t'").
+  Notation "x ..w" := (e_weight x) (at level 3, format "x '..w'").
 
   Definition labelling := V.t -> nat.
 
@@ -181,13 +214,12 @@ Module WeightedGraph (V : UsualDecidableType).
 
     Definition Rs := clos_refl_trans _ R.
 
-    Instance Rs_refl : Reflexive Rs := rt_refl _ _.
-    Instance Rs_trans : Transitive Rs := rt_trans _ _.
+    Global Instance Rs_refl : Reflexive Rs := rt_refl _ _.
+    Global Instance Rs_trans : Transitive Rs := rt_trans _ _.
 
     Definition invariants :=
       (* E ⊆ V × V *)
-      (forall e, EdgeSet.In e (E G)
-            -> VSet.In (fst (fst e)) (V G) /\ VSet.In (snd e) (V G))
+      (forall e, EdgeSet.In e (E G) -> VSet.In e..s (V G) /\ VSet.In e..t (V G))
       (* s ∈ V *)
       /\  VSet.In (s G) (V G)
       (* s is a source *)
@@ -197,7 +229,7 @@ Module WeightedGraph (V : UsualDecidableType).
       (VSet.add x (V G), (E G), (s G)).
 
     Definition add_edge e : t :=
-      (VSet.add (fst (fst e)) (VSet.add (snd e) (V G)), EdgeSet.add e (E G), (s G)).
+      (VSet.add e..s (VSet.add e..t (V G)), EdgeSet.add e (E G), (s G)).
 
 
     Definition R0 (x y : V.t) := EdgeSet.In (x, 0, y) (E G).
@@ -205,8 +237,8 @@ Module WeightedGraph (V : UsualDecidableType).
     (* paths of weight 0 *)
     Definition R0s := clos_refl_trans _ R0.
 
-    Instance R0s_refl : Reflexive R0s := rt_refl _ _.
-    Instance R0s_trans : Transitive R0s := rt_trans _ _.
+    Global Instance R0s_refl : Reflexive R0s := rt_refl _ _.
+    Global Instance R0s_trans : Transitive R0s := rt_trans _ _.
 
     (* paths with one positive edge *)
     Definition R1 (x y : V.t) :=
@@ -216,7 +248,7 @@ Module WeightedGraph (V : UsualDecidableType).
 
     Definition R1s := clos_trans _ R1.
 
-    Instance R1s_trans : Transitive R1s := t_trans _ _.
+    Global Instance R1s_trans : Transitive R1s := t_trans _ _.
 
     Lemma acyclic_notR1s : acyclic -> forall x, ~ R1s x x.
     Proof.
@@ -231,7 +263,7 @@ Module WeightedGraph (V : UsualDecidableType).
 
     Definition correct_labelling (l : labelling) :=
       l (s G) = 0 /\
-      forall e, EdgeSet.In e (E G) -> l (fst (fst e)) + (snd (fst e)) <= l (snd e).
+      forall e, EdgeSet.In e (E G) -> l e..s + e..w <= l e..t.
 
     Lemma correct_labelling_R0 l (Hl : correct_labelling l)
       : forall x y, R0 x y -> l x <= l y.
@@ -264,12 +296,12 @@ Module WeightedGraph (V : UsualDecidableType).
 
     Definition get_edges x y :=
       let L := List.filter
-                 (fun e => match V.eq_dec (fst (fst e)) x, V.eq_dec (snd e) y with
+                 (fun e => match V.eq_dec e..s x, V.eq_dec (snd e) y with
                      | left _, left _ => true
                      | _, _ => false
                      end)
                  (EdgeSet.elements (E G)) in (* edges x --> y *)
-      List.map (snd ∘ fst) L.
+      List.map (fun e => e..w) L.
 
     Lemma get_edges_spec x y n
       : In n (get_edges x y) <-> EdgeSet.In (x, n, y) (E G).
@@ -281,11 +313,12 @@ Module WeightedGraph (V : UsualDecidableType).
       apply Morphisms_Prop.ex_iff_morphism.
       intros [[x' n'] y']; cbn.
       etransitivity. apply and_iff_compat_l. apply filter_In.
-      unfold V.eq. intuition; cbn in *.
-      all: destruct (V.eq_dec x' x); destruct (V.eq_dec y' y);
-        try discriminate; intuition.
+      cbn. destruct (V.eq_dec x' x); destruct (V.eq_dec y' y); intuition; subst.
+      reflexivity. all: inversion H0; intuition.
     Qed.
 
+
+    Import Nbar.
 
     (* l is the list of authorized intermediate nodes *)
     (* d (a::l) x y = max (d l x y)  (d l x a + d l a y) *)
@@ -294,32 +327,14 @@ Module WeightedGraph (V : UsualDecidableType).
       revert x y; induction l; intros x y.
       - refine (match get_edges x y with
                 | nil => if V.eq_dec x y then Some 0 else None
-                | x :: l => Some (List.fold_left max l x)
+                | x :: l => Some (List.fold_left Nat.max l x)
                 end).
-      - refine (Nbar.max (IHl x y) (Nbar.add (IHl x a) (IHl a y))).
-        (* refine (match IHl x y, IHl x a, IHl a y with *)
-        (*         | Some d1, Some d2, Some d3 => Some (max d1 (d2 + d3)) *)
-        (*         | Some d1, None, _ *)
-        (*         | Some d1, _, None => Some d1 *)
-        (*         | None, Some d2, Some d3 => Some (d2 + d3) *)
-        (*         | _, _, _ => None *)
-        (*         end). *)
+      - refine (max (IHl x y) (IHl x a + IHl a y)).
     Defined.
 
     Definition d' := d'0 (VSet.elements (V G)).
 
-    (* (* l is the list of authorized nodes (intermediate and source) *) *)
-    (* Definition R' (l : list V.t) (x y : V.t) *)
-    (*   := InA V.eq x l /\ exists n, EdgeSet.In (x, n, y) (E G). *)
-
-    (* Definition R's l := clos_refl_trans _ (R' l). *)
-
-    (* Instance R's_refl l : Reflexive (R's l) := rt_refl _ _. *)
-    (* Instance R's_trans l : Transitive (R's l) := rt_trans _ _. *)
-
-    (* Definition R'' l x y := *)
-    (*   (exists z n, EdgeSet.In (x, n, z) (E G) /\ R's l z y) \/ V.eq x y. *)
-
+    (* R'' is Rs with l the list of authorized intermediate nodes *)
     Inductive R'' l : V.t -> V.t -> Prop :=
     | r''_refl x : R'' l x x
     | r''_one x y n : EdgeSet.In (x, n, y) (E G) -> R'' l x y
@@ -344,26 +359,6 @@ Module WeightedGraph (V : UsualDecidableType).
       now destruct HI as [? [[] HH]].
       auto.
     Qed.
-
-    (* Definition R'_ok x y : R x y <-> R' (VSet.elements (V G)) x y. *)
-    (* Proof. *)
-    (*   split. *)
-    (*   - induction 1. pose proof (proj1 HI _ H) as HH; cbn in HH. *)
-    (*     repeat split; try now apply VSetProp.FM.elements_1. *)
-    (*     eexists; eassumption. *)
-    (*   - unfold R', R; intuition. *)
-    (* Defined. *)
-
-    (* Definition R's_ok x y : Rs x y <-> R's (VSet.elements (V G)) x y. *)
-    (* Proof. *)
-    (*   split. *)
-    (*   - induction 1. constructor. now apply R'_ok. *)
-    (*     apply rt_refl. *)
-    (*     eapply rt_trans; eassumption. *)
-    (*   - induction 1. constructor. now apply R'_ok. *)
-    (*     apply rt_refl. *)
-    (*     eapply rt_trans; eassumption. *)
-    (* Defined. *)
 
     Definition R''_ok x y : Rs x y <-> R'' (VSet.elements (V G)) x y.
     Proof.
@@ -422,14 +417,14 @@ Module WeightedGraph (V : UsualDecidableType).
       - etransitivity. 2: eassumption. constructor. exists x; exists y; exists n; easy.
     Qed.
 
-    Lemma d'_ok1 l : forall x y, (Nbar.is_pos (d'0 l x y)) -> R1s x y.
+    Lemma d'_ok1 l : forall x y, (is_pos (d'0 l x y)) -> R1s x y.
     Proof.
       induction l; intros x y.
       - simpl. case_eq (get_edges x y).
         intros _.
         case_eq (V.eq_dec x y); intros e H H1; inversion H1.
         intros n l H H0.
-        set (m := fold_left max l n) in *.
+        set (m := fold_left Nat.max l n) in *.
         pose proof (fold_max_In n m l eq_refl).
         change (In m (n :: l)) in H1. rewrite <- H in H1.
         apply get_edges_spec in H1.
@@ -455,7 +450,7 @@ Module WeightedGraph (V : UsualDecidableType).
         intros _. case_eq (V.eq_dec x x); intuition.
         intros n l H.
         pose proof (fold_max_In n _ l eq_refl) as X.
-        set (m := fold_left max l n) in *; clearbody m.
+        set (m := fold_left Nat.max l n) in *; clearbody m.
         change (In m (n :: l)) in X. rewrite <- H in X; clear H.
         destruct m; [reflexivity|].
         apply False_rect, (HG x). constructor.
@@ -477,8 +472,7 @@ Module WeightedGraph (V : UsualDecidableType).
     Qed.
 
 
-    Lemma d'_ok0' (HG : forall x, ~ R1s x x) l
-      : forall x y, R'' l x y -> Nbar.is_finite (d'0 l x y).
+    Lemma d'_ok0' l : forall x y, R'' l x y -> is_finite (d'0 l x y).
     Proof.
       induction l; intros x y.
       - induction 1; cbn.
@@ -510,7 +504,7 @@ Module WeightedGraph (V : UsualDecidableType).
         eauto. apply Nbar.is_finite_add; eauto.
     Qed.
 
-    Lemma fold_max_le n m l (H : n <= m \/ Exists (le n) l)
+    Lemma fold_max_le n m l (H : n <= m \/ Exists (Peano.le n) l)
       : n <= fold_left Nat.max l m.
     Proof.
       revert m H; induction l; cbn in *; intros m [H|H].
@@ -528,31 +522,6 @@ Module WeightedGraph (V : UsualDecidableType).
       eexists. split. eassumption. reflexivity.
     Qed.
 
-    Import Nbar.
-
-    Definition max_lub n m p : (n <= p -> m <= p -> max n m <= p)%nbar.
-    Admitted.
-
-    Definition add_max_distr_r n m p
-      : (max (n + p) (m + p) = max n m + p)%nbar.
-    Admitted.
-
-    Definition max_le' n m p
-      : (p <= n \/ p <= m -> p <= max n m)%nbar.
-    Admitted.
-
-    Definition plus_le_compat_l n m p : (n <= m -> p + n <= p + m)%nbar.
-    Admitted.
-
-    Definition add_assoc n m p : (n + (m + p) = n + m + p)%nbar.
-    Admitted.
-
-    Definition add_O_r n : (n + Some 0 = n)%nbar.
-    Admitted.
-
-    Definition max_idempotent n : (max n n = n)%nbar.
-    Admitted.
-
     Lemma d'_ok3 (HG : forall x, ~ R1s x x) l x y1 y2 n
           (He : EdgeSet.In (y1, n, y2) (E G))
           (Hy : In y1 l)
@@ -568,7 +537,7 @@ Module WeightedGraph (V : UsualDecidableType).
           now apply fold_max_le'.
         + inversion Hy.
       - simpl. destruct Hy.
-        + subst. rewrite (d'_ok2 HG), add_O_r, max_idempotent.
+        + subst. rewrite (d'_ok2 HG), add_0_r, max_idempotent.
           apply max_le'. right. apply plus_le_compat_l.
           clear -He HI. {
             induction l.
@@ -594,11 +563,11 @@ Module WeightedGraph (V : UsualDecidableType).
                        in _); [|clearbody H].
         apply proj1 in HI. specialize (HI _ He).
         apply proj1, InA_alt in HI. destruct HI as [? [[] ?]]; assumption.
-        simple refine (let H1 := d'_ok0' HG (VSet.elements (V G)) (s G) x _ in _);
+        simple refine (let H1 := d'_ok0' (VSet.elements (V G)) (s G) x _ in _);
           [|destruct H1 as [n1 H1]].
         apply R''_ok. apply HI.
         apply proj1 in HI. specialize (HI _ He); apply HI.
-        simple refine (let H2 := d'_ok0' HG (VSet.elements (V G)) (s G) y _ in _);
+        simple refine (let H2 := d'_ok0' (VSet.elements (V G)) (s G) y _ in _);
           [|destruct H2 as [n2 H2]].
         apply R''_ok. apply HI.
         apply proj1 in HI. specialize (HI _ He); apply HI.
@@ -617,232 +586,38 @@ Module WeightedGraph (V : UsualDecidableType).
       exact (correct_labelling_R _ Hl).
     Defined.
 
-
-
-
-
-
-
-    Conjecture R1_dec : forall x y, {R1 x y} + {~ R1 x y}.
-    Conjecture Rs_dec : forall x y, {Rs x y} + {~ Rs x y}.
-
-    Import MonadNotation.
-  Fixpoint monad_fold_left {T} {M : Monad T} {A B} (g : T A -> B -> T A)
-           (l : list B) (x : T A) : T A
-    := match l with
-       | nil => x
-       | y :: l => monad_fold_left g l (g x y)
-       end.
-
-    (* biggest distance from s to x *)
-    (* None iff no path from s to x *)
-    Definition d (s x : V.t) (H1 : Acc R1 x) : option nat.
-      induction H1 as [x H1 d].
-      simple refine (let preds := filter_pack (fun y => R1 y x) _
-                                              (VSet.elements (V G)) in _).
-      - intro y; cbn. apply R1_dec.
-      - refine (monad_fold_left _ preds None).
-        refine (fun n X => match n, d X.1 X.2 with
-                        | Some n, Some m => Some (max n m)
-                        | Some n, None => Some n
-                        | None, Some m => Some m
-                        | None, None => None
-                        end).
-    Defined.
-
-    (* (* biggest distance from s to x *) *)
-    (* Definition d (s x : V.t) (H1 : Acc R1 x) (H2 : Rs s x) : nat. *)
-    (*   induction H1 as [x H1 d]. *)
-    (*   simple refine (let preds := filter_pack (fun y => Rs s y /\ R1 y x) _ *)
-    (*                                           (VSet.elements (V G)) in _). *)
-    (*   - intro y; cbn. *)
-    (*     refine (match Rs_dec s y, R1_dec y x with *)
-    (*             | left _, left _ => left _ *)
-    (*             | _, _ => right _ *)
-    (*             end); intuition. *)
-    (*   - exact (List.fold_left (fun n X => max n (d X.1 (proj2 X.2) (proj1 X.2))) *)
-    (*                           preds 0). *)
-    (* Defined. *)
-
-    Definition d_labelling (HG : acyclic) : labelling
-      := fun x => option_get 0 (d (s G) x (HG _)).
-
-
-    Remark toto : forall x y,
-        (exists k, forall l, correct_labelling l -> (l x + k <= l y))
-        <-> (forall l, correct_labelling l -> (l x <= l y)).
+    Lemma d'_qsmlf : forall x y, R1s x y -> is_pos (d' x y).
     Proof.
-      intros x y; split.
-      intros [k H] l Hl. specialize (H _ Hl); Lia.lia.
-      intros H; exists 0. intros l Hl. specialize (H _ Hl); Lia.lia.
-    Defined.
+      induction 1.
+      - pose (d'_ok3).
+    Abort.
 
-    Lemma d_ok (HG : acyclic) : forall k x y,
-        (forall l, correct_labelling l -> (l x + k <= l y))
-        <-> on_Some (le k) (d x y (HG y)).
-    Admitted.
-
-    (* Corollary d_ok' (HG : acyclic) l (Hl : correct_labelling l) x y p *)
-    (*   : l x + d x y (HG y) p <= l y. *)
-    (* Proof. *)
-    (*   apply (d_ok HG (d x y (HG y) p) x y). exists p; constructor. *)
-    (*   assumption. *)
-    (* Defined. *)
-
-    Lemma d_labelling_ok HG
-      : correct_labelling (d_labelling HG).
+    Lemma lqsdkf : (forall x, ~ R1s x x) <-> (forall x, d' x x = Some 0).
     Proof.
-      split; unfold d_labelling.
-      - 
-        (* destruct (HG (s G)). simpl. *)
-        (* match goal with *)
-        (* | |- fold_left _ ?l _ = _ => set l *)
-        (* end. *)
-        (* destruct l. reflexivity. *)
-        (* apply False_rect. *)
-        (* clear -a s0. destruct s0 as [x [H1 H2]]. specialize (a x H2). *)
-        admit.
-      - intros [[e1 n] e2] He; cbn.
-        destruct (Rs_dec (s G) e1); [|unfold invariants in HI; firstorder].
-        destruct (Rs_dec (s G) e2); [|unfold invariants in HI; firstorder].
-        pose proof (proj1 (d_ok HG (d (s G) e1 (HG e1) r + n) (s G) e2)).
-        destruct H.
-        + intros l Hl.
-          pose proof (proj2 Hl _ He); cbn in H.
-          pose proof (d_ok' HG l Hl (s G) e2 r0).
-          Lia.lia.
-          assert
-
-
-        unfold d.
-
-    Admitted.
+      split. intros; now apply d'_ok2.
+      intros H x p. 
+    Abort.
 
 
 
-    Lemma acyclic_labelling : acyclic <-> exists l, correct_labelling l.
-    Proof.
-      split. intro; eexists; now unshelve eapply d_labelling_ok.
-      intros [l Hl]. eapply Wf_nat.well_founded_lt_compat.
-      exact (correct_labelling_R _ Hl).
-    Qed.
-
-  End graph.
+    (* Rs -> leq : facile *)
+    (* leq -> d = Some : facile pq d correct_labelling *)
+    (* d = Some _ -> Rs ?? *)
 
 
-  Definition path (E : EdgeSet.t) : V.t -> V.t -> bool.
-    induction (EdgeSet.elements E) as [|e l path].
-    exact (fun x y => if V.eq_dec x y then true else false).
-    exact (fun x y => path x y || (path x (fst (fst e)) && path (snd e) y)).
-  Defined.
+End graph.
 
-  Conjecture path_spec : forall {G} x y, reflect (Rs G x y) (path (snd (fst G)) x y).
-
-  
-  Lemma add_node_invariants {G} (HG : invariants G) {x} (Hx : R G (s G) x)
-    : invariants (add_node G x).
-  Proof.
-    unfold invariants in *.
-  Admitted.
-
-  Lemma add_edge_invariants {G} (HG : invariants G) {e}
-        (He : R G (s G) (fst (fst e)))
-    : invariants (add_edge G e).
-  Proof.
-    unfold invariants in *.
-  Admitted.
+Lemma Rs_add_edge {G} e {x y} : Rs G x y -> Rs (add_edge G e) x y.
+Proof.
+  induction 1.
+  * constructor. destruct H as [n H].
+    exists n. cbn. apply EdgeSetFact.add_iff; auto.
+  * reflexivity.
+  * etransitivity; eauto.
+Qed.
 
 End WeightedGraph.
 
-
-
-
-
-
-
-
-
-(* Definition valuation_of_graph φ (H: well_founded (R φ)) : valuation. *)
-(* Proof. *)
-(*   pose (V := fst φ). pose (E := snd φ). *)
-(*   unshelve econstructor. *)
-(*   refine (fun s => if VerticeSet.mem (Level s) V then BinIntDef.Z.to_pos (option_get 1 (d φ lSet (Level s) (H _))) else 1%positive). *)
-(*   refine (fun n => if VerticeSet.mem (Var n) V then Z.to_nat (option_get 0 (d φ lSet (Var n) (H _))) else 0%nat). *)
-(* Defined. *)
-
-(* Lemma Acc_ok1 ctrs : (exists φ, make_graph ctrs = Some φ /\ well_founded (R φ)) -> consistent ctrs. *)
-(* Proof. *)
-(*   intros [φ [H1 H2]]. *)
-(*   exists (valuation_of_graph φ H2). *)
-(*   unfold satisfies. intros [[l1 []] l2] Huc; constructor. *)
-(*   - destruct l1, l2. *)
-(*         * admit. *)
-(*         * admit. *)
-(*         * admit. *)
-(*         * admit. *)
-(*         * admit. *)
-(*         * admit. *)
-(*         * admit. *)
-(*         * admit. *)
-(*         * admit. *)
-(*         * admit. *)
-(*         * cbn. *)
-(*  assert (e: d φ lSet (Level s) (H2 (Level s)) < d φ lSet (Level s0) (H2 (Level s0))). *)
- 
-
-(* assert (d φ lSet l1 < d φ lSet l2). *)
-
-
-(*   unfold satisfies0. intros uc Huc. *)
-  
-
-(*   revert φ H1 H2. *)
-(*   induction ctrs using ConstraintSetProp.set_induction; *)
-(*     intros φ H1 H2. *)
-(*   - intros x Hx. apply False_rect. *)
-(*     apply (ConstraintSetFact.empty_iff x). *)
-(*     eapply ConstraintSetFact.In_m. reflexivity. *)
-(*     2: eassumption. symmetry. *)
-(*     now apply ConstraintSetProp.empty_is_empty_1. *)
-(*   - assert (satisfies0 (valuation_of_graph φ H2) x) . { *)
-(*       assert (Hc : ConstraintSet.In x ctrs2). admit. (* ok *) *)
-(*       clear H H0 IHctrs1 ctrs1. *)
-(*       destruct x as [[l1 []] l2]; econstructor. *)
-(*       + destruct l1, l2. *)
-(*         * admit. *)
-(*         * admit. *)
-(*         * admit. *)
-(*         * admit. *)
-(*         * admit. *)
-(*         * admit. *)
-(*         * admit. *)
-(*         * admit. *)
-(*         * admit. *)
-(*         * admit. *)
-(*         * cbn. assert (e: VerticeSet.mem (Level s) (fst φ) = true). admit. *)
-(*           rewrite e. *)
-(*           assert ((d φ lSet (Level s) (H2 (Level s))) < (d φ lSet (Level s) (H2 (Level s0)))). *)
-
-(* } *)
-
-(*  unfold make_graph in H1. *)
-(*     unfold edges_of_constraints in H1. *)
-(*     rewrite ConstraintSetProp.fold_1b in H1. *)
-(*     unfold add_nodes_of_constraints in H1. *)
-(*     rewrite ConstraintSetProp.fold_1b in H1. *)
-
-
-(* Definition is_Some {A} (x : option A) := exists a, x = Some a. *)
-
-(* Conjecture Acc_ok : forall ctrs, consistent ctrs <-> exists φ, make_graph ctrs = Some φ /\ well_founded (R φ). *)
-
-(* Conjecture d_ok   : forall ctrs φ (e : make_graph ctrs = Some φ) (H : well_founded (R φ)) l l', *)
-(*     (exists k, forall v, satisfies v ctrs -> (val0 v (vtl l) <= (val0 v (vtl l')) + k)%Z) *)
-(*     <-> is_Some (d φ l l' (H _)). *)
-
-(* Conjecture d_ok2  : forall ctrs φ (e : make_graph ctrs = Some φ) (H : well_founded (R φ)) l l' k, *)
-(*     (forall v, satisfies v ctrs -> (val0 v (vtl l) <= (val0 v (vtl l')) + k)%Z) *)
-(*     <-> (forall k', d φ l l' (H _) = Some k' -> k >= k'). *)
 
 
 
@@ -903,3 +678,240 @@ End WeightedGraph.
 (*     | Some (_, vd) => Some (Z.opp vd) *)
 (*     | None => None *)
 (*     end. *)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(*   Definition check_le_vertice (l1 l2 : vertice) : bool := *)
+(*     match enforce l1 l2 with *)
+(*     | Some k => Z.geb k 0 *)
+(*     | None => false *)
+(*     end. *)
+
+(*   Definition check_lt_vertice (l1 l2 : vertice) : bool := *)
+(*     match enforce l1 l2 with *)
+(*     | Some k => Z.geb k 1 *)
+(*     | None => false *)
+(*     end. *)
+
+(*   Definition check_eq_vertice (l1 l2 : vertice) : bool := *)
+(*     check_le_vertice l1 l2 && check_le_vertice l2 l1. *)
+
+
+(*   Definition check_le_level (l1 l2 : universe_level) : bool := *)
+(*     match ltv l1, ltv l2 with *)
+(*     | None, _ => true *)
+(*     | _, None => false *)
+(*     | Some l1, Some l2 => match enforce l1 l2 with *)
+(*                          | Some k => Z.geb k 0 *)
+(*                          | None => false *)
+(*                          end *)
+(*     end. *)
+
+(*   Definition check_lt_level (l1 l2 : universe_level) : bool := *)
+(*     match ltv l1, ltv l2 with *)
+(*     | _, None => false *)
+(*     | None, _ => true *)
+(*     | Some l1, Some l2 => match enforce l1 l2 with *)
+(*                          | Some k => Z.geb k 1 *)
+(*                          | None => false *)
+(*                          end *)
+(*     end. *)
+
+(*   Definition check_eq_level (l1 l2 : universe_level) : bool := *)
+(*     check_le_level l1 l2 && check_le_level l2 l1. *)
+
+
+(*   Definition check_constraint (cstr : univ_constraint) : bool := *)
+(*     let '(l, d, r) := cstr in *)
+(*     match d with *)
+(*     | Eq => check_eq_level l r *)
+(*     | Lt => check_lt_level l r *)
+(*     | Le => check_le_level l r *)
+(*     end. *)
+
+(*   Definition check_constraints (cstrs : ConstraintSet.t) : bool := *)
+(*     ConstraintSet.for_all check_constraint cstrs. *)
+
+(*   Definition check_le_level_expr (e1 e2 : Universe.Expr.t) : bool := *)
+(*     match ltv (fst e1), ltv (fst e2) with *)
+(*     | None, _ => true *)
+(*     | _, None => false *)
+(*     | Some l1, Some l2 => *)
+(*       match enforce l1 l2 with *)
+(*       | None => false *)
+(*       | Some k => match snd e1, snd e2 with *)
+(*                  | false, false *)
+(*                  | true, true => k >=? 0 *)
+(*                  | true, false => k >=? 1 *)
+(*                  | false, true => k >=? -1 *)
+(*                  end *)
+(*       end *)
+(*     end. *)
+
+(*   Definition check_lt_level_expr (e1 e2 : Universe.Expr.t) : bool := *)
+(*     match ltv (fst e1), ltv (fst e2) with *)
+(*     | _, None => false *)
+(*     | None, _ => true *)
+(*     | Some l1, Some l2 => *)
+(*       match enforce l1 l2 with *)
+(*       | None => false *)
+(*       | Some k => match snd e1, snd e2 with *)
+(*                  | false, false *)
+(*                  | true, true => k >=? 1 *)
+(*                  | true, false => k >=? 2 *)
+(*                  | false, true => k >=? 0 *)
+(*                  end *)
+(*       end *)
+(*     end. *)
+
+(*   Definition check_eq_level_expr (e1 e2 : Universe.Expr.t) : bool := *)
+(*     check_le_level_expr e1 e2 && check_le_level_expr e2 e1. *)
+
+(*   Definition exists_bigger_or_eq (e1 : Universe.Expr.t) (u2 : Universe.t) : bool := *)
+(*     Universe.existsb (check_le_level_expr e1) u2. *)
+
+(*   Definition exists_strictly_bigger (e1 : Universe.Expr.t) (u2 : Universe.t) : bool := *)
+(*     Universe.existsb (check_lt_level_expr e1) u2. *)
+
+(*   Definition check_lt (u1 u2 : Universe.t) : bool := *)
+(*     Universe.for_all (fun e => exists_strictly_bigger e u2) u1. *)
+
+(*   Definition check_leq0 (u1 u2 : Universe.t) : bool := *)
+(*     Universe.for_all (fun e => exists_bigger_or_eq e u2) u1. *)
+
+(*   (** We try syntactic equality before checking the graph. *) *)
+(*   Definition check_leq `{checker_flags} s s' := *)
+(*     negb check_univs || Universe.equal s s' || check_leq0 s s'. *)
+
+(*   Definition check_eq `{checker_flags} s s' := *)
+(*     negb check_univs || Universe.equal s s' || (check_leq0 s s' && check_leq0 s' s). *)
+
+(*   Definition check_eq_instance `{checker_flags} u v := *)
+(*     Instance.equal_upto check_eq_level u v. *)
+
+(* End BellmanFord. *)
+
+
+(* Section Specif. *)
+(*   Conjecture no_universe_inconsistency_ok : forall φ, reflect (well_founded (R φ)) (no_universe_inconsistency φ). *)
+
+(*   Local Existing Instance default_checker_flags. *)
+
+(*   (* TODO: lower level conjecture *) *)
+(*   Conjecture check_leq_specif *)
+(*     : forall ctrs φ (e : make_graph ctrs = Some φ) u1 u2, reflect (leq_universe ctrs u1 u2) (check_leq φ u1 u2). *)
+
+(*   Conjecture check_eq_specif *)
+(*     : forall ctrs φ (e : make_graph ctrs = Some φ) u1 u2, reflect (eq_universe ctrs u1 u2) (check_eq φ u1 u2). *)
+(* End Specif. *)
+
+(*   (* Definition check_eq_refl `{checker_flags} u : check_eq φ u u = true. *) *)
+(*   (*   unfold check_eq; destruct check_univs; cbn; [|reflexivity]. *) *)
+
+(*   (* Conjecture eq_universe_instance_refl : forall `{checker_flags} u, eq_universe_instance u u = true. *) *)
+(*   (* Conjecture eq_universe_leq_universe : forall `{checker_flags} x y, *) *)
+(*   (*     eq_universe x y = true -> leq_universe x y = true. *) *)
+(*   (* Conjecture leq_universe_product_l : forall `{checker_flags} s1 s2, *) *)
+(*   (*     leq_universe s1 (Universe.sort_of_product s1 s2) = true. *) *)
+(*   (* Conjecture leq_universe_product_r : forall `{checker_flags} s1 s2, *) *)
+(*   (*     leq_universe s2 (Universe.sort_of_product s1 s2) = true. *) *)
+
+
+
+
+(*     (* Inductive super_result := *) *)
+(*     (* | SuperSame (_ : bool) *) *)
+(*     (* (* The level expressions are in cumulativity relation. boolean *) *)
+(*     (*        indicates if left is smaller than right?  *) *) *)
+(*     (* | SuperDiff (_ : comparison). *) *)
+(*     (* (* The level expressions are unrelated, the comparison result *) *)
+(*     (*        is canonical *) *) *)
+
+(*     (* (** [super u v] compares two level expressions, *) *)
+(*     (*    returning [SuperSame] if they refer to the same level at potentially different *) *)
+(*     (*    increments or [SuperDiff] if they are different. The booleans indicate if the *) *)
+(*     (*    left expression is "smaller" than the right one in both cases. *) *) *)
+(*     (* Definition super (x y : t) : super_result := *) *)
+(*     (*   match Level.compare (fst x) (fst y) with *) *)
+(*     (*   | Eq => SuperSame (bool_lt' (snd x) (snd y)) *) *)
+(*     (*   | cmp => *) *)
+(*     (*       match x, y with *) *)
+(*     (*       | (l, false), (l', false) => *) *)
+(*     (*         match l, l' with *) *)
+(*     (*         | Level.lProp, Level.lProp => SuperSame false *) *)
+(*     (*         | Level.lProp, _ => SuperSame true *) *)
+(*     (*         | _, Level.lProp => SuperSame false *) *)
+(*     (*         | _, _ => SuperDiff cmp *) *)
+(*     (*         end *) *)
+(*     (*       | _, _ => SuperDiff cmp *) *)
+(*     (*       end *) *)
+(*     (*   end. *) *)
+
+
+(*   (* Fixpoint merge_univs (fuel : nat) (l1 l2 : list Expr.t) : list Expr.t := *) *)
+(*   (*   match fuel with *) *)
+(*   (*   | O => l1 *) *)
+(*   (*   | S fuel => match l1, l2 with *) *)
+(*   (*              | [], _ => l2 *) *)
+(*   (*              | _, [] => l1 *) *)
+(*   (*              | h1 :: t1, h2 :: t2 => *) *)
+(*   (*                match Expr.super h1 h2 with *) *)
+(*   (*                | Expr.SuperSame true (* h1 < h2 *) => merge_univs fuel t1 l2 *) *)
+(*   (*                | Expr.SuperSame false => merge_univs fuel l1 t2 *) *)
+(*   (*                | Expr.SuperDiff Lt (* h1 < h2 is name order *) *) *)
+(*   (*                  => h1 :: (merge_univs fuel t1 l2) *) *)
+(*   (*                | _ => h2 :: (merge_univs fuel l1 t2) *) *)
+(*   (*                end *) *)
+(*   (*              end *) *)
+(*   (*   end. *) *)
+
+
+
+(* (* (* The monomorphic levels are > Set while polymorphic ones are >= Set. *) *) *)
+(* (* Definition add_node (l : Level.t) (G : t) : t *) *)
+(* (*   := let levels := LevelSet.add l (fst G) in *) *)
+(* (*      let constraints := *) *)
+(* (*          match l with *) *)
+(* (*          | Level.lProp | Level.lSet => snd G (* supposed to be yet here *) *) *)
+(* (*          | Level.Var _ => ConstraintSet.add (Level.set, ConstraintType.Le, l) (snd G) *) *)
+(* (*          | Level.Level _ => ConstraintSet.add (Level.set, ConstraintType.Lt, l) (snd G) *) *)
+(* (*          end in *) *)
+(* (*      (levels, constraints). *) *)
+
+(* (* Definition add_constraint (uc : univ_constraint) (G : t) : t *) *)
+(* (*   := let '((l, ct),l') := uc in *) *)
+(* (*      (* maybe useless if we always add constraints *) *)
+(* (*         in which the universes are declared *) *) *)
+(* (*      let G := add_node l (add_node l' G) in *) *)
+(* (*      let constraints := ConstraintSet.add uc (snd G) in *) *)
+(* (*      (fst G, constraints). *) *)
+
+(* (* Definition repr (uctx : universe_context) : UContext.t := *) *)
+(* (*   match uctx with *) *)
+(* (*   | Monomorphic_ctx c => c *) *)
+(* (*   | Polymorphic_ctx c => c *) *)
+(* (*   | Cumulative_ctx c => CumulativityInfo.univ_context c *) *)
+(* (*   end. *) *)
+
+(* (* Definition add_global_constraints (uctx : universe_context) (G : t) : t *) *)
+(* (*   := match uctx with *) *)
+(* (*      | Monomorphic_ctx (inst, cstrs) => *) *)
+(* (*        let G := List.fold_left (fun s l => add_node l s) inst G in *) *)
+(* (*        ConstraintSet.fold add_constraint cstrs G *) *)
+(* (*      | Polymorphic_ctx _ => G *) *)
+(* (*      | Cumulative_ctx _ => G *) *)
+(* (*      end. *) *)
+
+
