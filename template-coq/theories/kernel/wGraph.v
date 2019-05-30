@@ -3,13 +3,24 @@ Require Import Peano_dec Nat Bool List Relations Structures.Equalities
 From Template Require Import utils monad_utils.
 
 Inductive on_Some {A} (P : A -> Prop) : option A -> Prop :=
-| no_some : forall x, P x -> on_Some P (Some x).
+| on_some : forall x, P x -> on_Some P (Some x).
 
 Lemma on_Some_spec {A} (P : A -> Prop) z :
   on_Some P z <-> exists x, z = Some x /\ P x.
 Proof.
   split. intros []. now eexists.
   intros [? [e ?]]. subst. now constructor.
+Qed.
+
+Inductive on_Some_or_None {A} (P : A -> Prop) : option A -> Prop :=
+| on_some' : forall x, P x -> on_Some_or_None P (Some x)
+| or_none : on_Some_or_None P None.
+
+Lemma on_Some_or_None_spec {A} (P : A -> Prop) z :
+  on_Some_or_None P z <-> z = None \/ on_Some P z.
+Proof.
+  split. intros []. right; now constructor. left; reflexivity.
+  intros [|[]]; subst; now constructor.
 Qed.
 
 Fixpoint filter_pack {A} (P : A -> Prop) (HP : forall x, {P x} + {~ P x})
@@ -29,6 +40,24 @@ Proof.
   intuition.
   apply IHl in H.
   apply or_assoc. destruct H; [left|now right]. lia.
+Qed.
+
+Lemma fold_max_le n m l (H : n <= m \/ Exists (Peano.le n) l)
+  : n <= fold_left Nat.max l m.
+Proof.
+  revert m H; induction l; cbn in *; intros m [H|H].
+  assumption. inversion H.
+  eapply IHl. left; lia.
+  eapply IHl. inversion_clear H.
+  left; lia. right; assumption.
+Qed.
+
+Lemma fold_max_le' n m l (H : In n (m :: l))
+  : n <= fold_left Nat.max l m.
+Proof.
+  apply fold_max_le. destruct H.
+  left; lia. right. apply Exists_exists.
+  eexists. split. eassumption. reflexivity.
 Qed.
 
 Definition is_Some {A} (x : option A) := exists a, x = Some a.
@@ -144,6 +173,11 @@ Module Nbar.
     destruct n, m, p; cbn; intuition.
   Defined.
 
+  Definition plus_le_compat n m p q : n <= m -> p <= q -> n + p <= m + q.
+  Proof.
+    destruct n, m, p, q; cbn; intuition.
+  Defined.
+
   Definition max_idempotent n : max n n = n.
   Proof.
     destruct n; try reflexivity; cbn.
@@ -151,9 +185,10 @@ Module Nbar.
   Defined.
 End Nbar.
 
+Require Import MSets.MSetList.
 
-Module WeightedGraph (V : UsualDecidableType).
-  Module VSet := MSets.MSetWeakList.Make V.
+Module WeightedGraph (V : UsualOrderedType).
+  Module VSet := MSets.MSetList.Make V.
   (* todo: remove if unused *)
   Module VSetFact := WFactsOn V VSet.
   Module VSetProp := WPropertiesOn V VSet.
@@ -161,34 +196,59 @@ Module WeightedGraph (V : UsualDecidableType).
     Definition t := (V.t * nat * V.t)%type.
     Definition eq : t -> t -> Prop := eq.
     Definition eq_equiv : RelationClasses.Equivalence eq := _.
-    Definition eq_refl : forall x : t, eq x x := @eq_refl _.
-    Definition eq_sym : forall x y : t, eq x y -> eq y x := @eq_sym _.
-    Definition eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z := @eq_trans _.
-    Definition eq_dec : forall x y : t, {eq x y} + {~ eq x y}.
+
+    Definition lt : t -> t -> Prop :=
+      fun '(x, n, y) '(x', n', y') => (V.lt x x') \/ (V.eq x x' /\ n < n')
+                                   \/ (V.eq x x' /\ n = n' /\ V.lt y y').
+    Definition lt_strorder : StrictOrder lt.
+      split.
+      - intros [[x n] y] H; cbn in H. intuition.
+        all: eapply V.lt_strorder; eassumption.
+      - intros [[x1 n1] y1] [[x2 n2] y2] [[x3 n3] y3] H1 H2; cbn in *.
+        pose proof (StrictOrder_Transitive x1 x2 x3) as T1.
+        pose proof (StrictOrder_Transitive y1 y2 y3) as T2.
+        pose proof (@eq_trans _ n1 n2 n3) as T3.
+        unfold VSet.E.lt in *. unfold V.eq in *.
+        destruct H1 as [H1|[[H1 H1']|[H1 [H1' H1'']]]];
+          destruct H2 as [H2|[[H2 H2']|[H2 [H2' H2'']]]]; subst; intuition.
+    Qed.
+    Definition lt_compat : Proper (Logic.eq ==> Logic.eq ==> iff) lt.
+      intros x x' H1 y y' H2. now subst.
+    Qed.
+   Definition compare : t -> t -> comparison
+     := fun '(x, n, y) '(x', n', y') => match V.compare x x' with
+                                     | Lt => Lt
+                                     | Gt => Gt
+                                     | Eq => match PeanoNat.Nat.compare n n' with
+                                            | Lt => Lt
+                                            | Gt => Gt
+                                            | Eq => V.compare y y'
+                                            end
+                                     end.
+   Definition compare_spec :
+     forall x y : t, CompareSpec (x = y) (lt x y) (lt y x) (compare x y).
+     intros [[x1 n1] y1] [[x2 n2] y2]; cbn.
+     pose proof (V.compare_spec x1 x2) as H1.
+     destruct (V.compare x1 x2); cbn in *; inversion_clear H1.
+     2-3: constructor; intuition.
+     subst. pose proof (PeanoNat.Nat.compare_spec n1 n2) as H2.
+     destruct (n1 ?= n2); cbn in *; inversion_clear H2.
+     2-3: constructor; intuition.
+     subst. pose proof (V.compare_spec y1 y2) as H3.
+     destruct (V.compare y1 y2); cbn in *; inversion_clear H3;
+       constructor; subst; intuition.
+   Defined.
+     
+   Definition eq_dec : forall x y : t, {x = y} + {x <> y}.
       unfold eq. decide equality. apply V.eq_dec.
       decide equality. apply PeanoNat.Nat.eq_dec. apply V.eq_dec.
     Defined.
-    Definition eqb : t -> t -> bool := fun x y => if eq_dec x y then true else false.
-
-    (* Definition eq (e1 e2 : t) : Prop := *)
-    (*   let '(x1, n1, y1) := e1 in let '(x2, n2, y2) := e2 in *)
-    (*   V.eq x1 x2 /\ n1 = n2 /\ V.eq y1 y2. *)
-    (* Definition eq_equiv : RelationClasses.Equivalence eq. *)
-    (*   split. *)
-    (*   intros [[x n] y]; cbn; intuition. *)
-    (*   intros [[x n] y] [[x' n'] y']; cbn; intuition. *)
-    (*   intros [[x n] y] [[x' n'] y'] [[x'' n''] y'']; cbn; intuition. *)
-    (*   all: etransitivity; eassumption.  *)
-    (* Defined. *)
-    (* Definition eq_dec : forall x y : t, {eq x y} + {~ eq x y}. *)
-    (*   intros [[x1 n1] y1] [[x2 n2] y2]; cbn. *)
-    (*   destruct (V.eq_dec x1 x2). destruct (V.eq_dec y1 y2).  *)
-    (*   destruct (Peano_dec.eq_nat_dec n1 n2). *)
-    (*   left. intuition. *)
-    (*   all: right; intuition. *)
-    (* Defined. *)
+    Definition eqb : t -> t -> bool := fun x y => match compare x y with
+                                          | Eq => true
+                                          | _ => false
+                                          end.
   End Edge.
-  Module EdgeSet:= MSets.MSetWeakList.Make Edge.
+  Module EdgeSet:= MSets.MSetList.Make Edge.
   Module EdgeSetFact := WFactsOn Edge EdgeSet.
   Module EdgeSetProp := WPropertiesOn Edge EdgeSet.
 
@@ -234,26 +294,59 @@ Module WeightedGraph (V : UsualDecidableType).
 
     Definition R0 (x y : V.t) := EdgeSet.In (x, 0, y) (E G).
 
-    (* paths of weight 0 *)
+    (* exists a paths of weight 0 *)
     Definition R0s := clos_refl_trans _ R0.
 
     Global Instance R0s_refl : Reflexive R0s := rt_refl _ _.
     Global Instance R0s_trans : Transitive R0s := rt_trans _ _.
 
-    (* paths with one positive edge *)
+    Definition R0s_Rs x y : R0s x y -> Rs x y.
+    Proof.
+      induction 1.
+      - constructor. exists 0; assumption.
+      - reflexivity.
+      - etransitivity; eauto.
+    Qed.
+
+    (* exists a path with one positive edge *)
     Definition R1 (x y : V.t) :=
       exists x0 y0 n, R0s x x0 /\ EdgeSet.In (x0, S n, y0) (E G) /\ R0s y0 y.
-
-    Definition acyclic := well_founded R1.
 
     Definition R1s := clos_trans _ R1.
 
     Global Instance R1s_trans : Transitive R1s := t_trans _ _.
 
-    Lemma acyclic_notR1s : acyclic -> forall x, ~ R1s x x.
+    Lemma R1s_Rs : forall x y z, R1s x y -> Rs y z -> R1s x z.
     Proof.
-      intros H x; induction (H x).
-      intro p. apply clos_trans_tn1 in p.
+      intros x y z H1 H2; revert H1; induction H2; intuition.
+      destruct H as [[|n] H].
+      - revert H; induction H1.
+        + intro H1. constructor.
+          destruct H as [x1 [y1 [n1 H]]]. exists x1; exists y1; exists n1.
+          intuition. etransitivity. eassumption. constructor. assumption.
+        + intro. etransitivity. eassumption. intuition.
+      - etransitivity. eassumption. constructor. exists x0; exists y; exists n; easy.
+    Qed.
+
+    Lemma Rs_R1s : forall x y z, Rs x y -> R1s y z -> R1s x z.
+    Proof.
+      intros x y z H1 H2; induction H1; intuition.
+      destruct H as [[|n] H].
+      - revert H; induction H2.
+        + intro H2. constructor.
+          destruct H as [x1 [y1 [n1 H]]]. exists x1; exists y1; exists n1.
+          intuition. etransitivity. 2: eassumption. constructor. assumption.
+        + intro. etransitivity. 2: eassumption. intuition.
+      - etransitivity. 2: eassumption. constructor. exists x; exists y; exists n; easy.
+    Qed.
+
+    Definition acyclic_well_founded := well_founded R1.
+    Definition acyclic_no_loop := VSet.For_all (fun x => ~ R1s x x) (V G).
+
+    Lemma acyclic_wf_no_loop : acyclic_well_founded -> acyclic_no_loop.
+    Proof.
+      intros H x _. induction (H x).
+      intros p. apply clos_trans_tn1 in p.
       inversion_clear p.
       + eapply H1. exact H2. now constructor.
       + eapply H1. exact H2.
@@ -288,7 +381,7 @@ Module WeightedGraph (V : UsualDecidableType).
       apply proj2 in Hl. specialize (Hl _ He2); cbn in Hl. lia.
     Qed.
 
-    Lemma acyclic_labelling l : correct_labelling l -> acyclic.
+    Lemma acyclic_labelling l : correct_labelling l -> acyclic_well_founded.
     Proof.
       intro Hl. eapply Wf_nat.well_founded_lt_compat.
       exact (correct_labelling_R _ Hl).
@@ -320,65 +413,288 @@ Module WeightedGraph (V : UsualDecidableType).
 
     Import Nbar.
 
+    (* lsp = longest simple path *)
     (* l is the list of authorized intermediate nodes *)
-    (* d (a::l) x y = max (d l x y)  (d l x a + d l a y) *)
-    Definition d'0 (l : list V.t) (x y : V.t) : Nbar.t.
-    Proof.
-      revert x y; induction l; intros x y.
-      - refine (match get_edges x y with
+    (* lsp0 (a::l) x y = max (lsp0 l x y) (lsp0 l x a + lsp0 l a y) *)
+    Fixpoint lsp0 (l : list V.t) (x y : V.t) : Nbar.t :=
+      match l with
+      | nil => match get_edges x y with
                 | nil => if V.eq_dec x y then Some 0 else None
                 | x :: l => Some (List.fold_left Nat.max l x)
-                end).
-      - refine (max (IHl x y) (IHl x a + IHl a y)).
+                end
+      | a :: l => max (lsp0 l x y) (lsp0 l x a + lsp0 l a y)
+      end.
+
+    Definition lsp := lsp0 (VSet.elements (V G)).
+
+
+    (* paths with all intermediate nodes in l *)
+    Inductive Paths : list V.t -> V.t -> V.t -> Type :=
+    | Paths_refl x : Paths nil x x
+    | Paths_one x y n : EdgeSet.In (x, n, y) (E G) -> Paths nil x y
+    | Paths_trans l x y z : x <> y -> y <> z -> Paths l x y
+                            -> Paths l y z -> Paths (y :: l) x z
+    | Paths_sub l z x y : Paths l x y -> Paths (z :: l) x y.
+
+    Instance Paths_refl' l : CRelationClasses.Reflexive (Paths l).
+    Proof.
+      induction l. exact Paths_refl.
+      intro x. apply Paths_sub. apply IHl.
     Defined.
 
-    Definition d' := d'0 (VSet.elements (V G)).
+    Definition Paths_one' l : forall x y n, EdgeSet.In (x, n, y) (E G) -> Paths l x y.
+    Proof.
+      induction l. exact Paths_one.
+      intros x y n H. apply Paths_sub. eapply IHl; eassumption.
+    Defined.
 
-    (* R'' is Rs with l the list of authorized intermediate nodes *)
-    Inductive R'' l : V.t -> V.t -> Prop :=
-    | r''_refl x : R'' l x x
-    | r''_one x y n : EdgeSet.In (x, n, y) (E G) -> R'' l x y
-    | r''_step x x' y n : EdgeSet.In (x, n, x') (E G)
-                          ->  In x' l -> R'' l x' y -> R'' l x y.
+    Fixpoint InT {A} (a : A) (l : list A) : Type :=
+      match l with
+      | nil => False
+      | b :: m => (b = a) + InT  a m
+      end.
 
-    Instance R''_refl l : Reflexive (R'' l) := r''_refl _.
+    Lemma Paths_trans0 l x y z n (Hy : InT y l)
+      : EdgeSet.In (x, n, y) (E G) -> Paths l y z -> Paths l x z.
+    Proof.
+      intros H1 H2; induction H2.
+      1-2: inversion Hy.
+      - destruct (V.eq_dec x y).
+        + subst. eapply Paths_sub. assumption.
+        + destruct Hy; [intuition|].
+          econstructor; eauto.
+      - destruct Hy.
+        + subst. econstructor. 2: eassumption.
+          eapply Paths_one'; eassumption.
+        + apply Paths_sub. intuition.
+    Defined.
+
+    Inductive Paths' : list V.t -> V.t -> V.t -> Type :=
+    | Paths'_refl l x : Paths' l x x
+    | Paths'_one l x y n : EdgeSet.In (x, n, y) (E G) -> Paths' l x y
+    | Paths'_step l x y z n : EdgeSet.In (x, n, y) (E G)
+                            -> x <> y -> InT y l -> Paths' l y z -> Paths' l x z.
+
+
+    Instance Paths'_refl' l : CRelationClasses.Reflexive (Paths' l)
+      := Paths'_refl l.
+
+    Definition Paths'_sub {l a x y} : Paths' l x y -> Paths' (a :: l) x y.
+    Proof.
+      intro p; induction p.
+      constructor. econstructor; eassumption.
+      eapply Paths'_step; try eassumption. now right.
+    Defined.
+
+    Lemma Paths'_trans {l x y z} (Hy : InT y l)
+      : Paths' l x y -> Paths' l y z -> Paths' l x z.
+    Proof.
+      intro p; induction p.
+      trivial. eapply Paths'_step; eassumption.
+      intro q.
+      eapply Paths'_step; try eassumption.
+      eapply IHp; assumption.
+    Defined.
+
+    Definition Paths_Paths' {l x y} : Paths l x y -> Paths' l x y.
+    Proof.
+      intro p; induction p.
+      - constructor.
+      - econstructor; eassumption.
+      - eapply Paths'_trans. left; reflexivity.
+        all: eapply Paths'_sub; eassumption.
+      - eapply Paths'_sub; eassumption.
+    Defined.
+
+    Definition Paths'_Paths {l x y} : Paths' l x y -> Paths l x y.
+    Proof.
+      intro p; induction p.
+      - reflexivity.
+      - eapply Paths_one'; eassumption.
+      - eapply Paths_trans0; eassumption.
+    Defined.
+
+    Fixpoint weight {l x y} (p : Paths l x y) : nat :=
+      match p with
+      | Paths_refl x => 0
+      | Paths_one x y n _ => n
+      | Paths_trans l x y z p q => weight p + weight q
+      | Paths_sub l z x y p => weight p
+      end.
+
+    Fixpoint weight' {l x y} (p : Paths' l x y) : nat :=
+      match p with
+      | Paths'_refl l x => 0
+      | Paths'_one l x y n _ => n
+      | Paths'_step l x y z n _ _ p => n + weight' p
+      end.
+
+    Lemma weight'_Paths'_trans {l x y z} Hy p q
+      : weight' (@Paths'_trans l x y z Hy p q) = weight' p + weight' q.
+    Proof.
+      induction p; simpl; try reflexivity.
+      rewrite IHp. lia.
+    Qed.
+
+    Lemma weight'_Paths'_sub {l a x y} p
+      : weight' (@Paths'_sub l a x y p) = weight' p.
+    Proof.
+      induction p; simpl; try reflexivity.
+      rewrite IHp. lia.
+    Qed.
+
+    Lemma weight'_Paths_Paths' {l x y} (p : Paths l x y)
+      : weight' (Paths_Paths' p) = weight p.
+    Proof.
+      induction p; simpl; try reflexivity.
+      rewrite weight'_Paths'_trans, !weight'_Paths'_sub, IHp1, IHp2; reflexivity.
+      rewrite weight'_Paths'_sub, IHp; reflexivity.
+    Qed.
+
+    Lemma weight_Paths_refl' {l x} : weight (@Paths_refl' l x) = 0.
+    Proof.
+      induction l; simpl; trivial.
+    Qed.
+
+    Lemma weight_Paths_one' {l x y n H} : weight (Paths_one' l x y n H) = n.
+    Proof.
+      induction l; simpl; trivial.
+    Qed.
+
+    Lemma weight_Paths_trans0 {l x y z n H1 H2 p} k
+      : weight p >= k -> weight (Paths_trans0 l x y z n H1 H2 p) >= n + k.
+    Proof.
+      induction p. 1-2: inversion H1.
+      - intro HH. destruct H1. cbn. destruct e. cbn.
+        rewrite weight_Paths_one'. cbn in HH.
+    Abort.
+    (*   inversion H1. *)
+    (*   simpl. *)
+
+    (*   - econstructor. 2: eassumption. destruct Hy. *)
+    (*     + subst. eapply Paths_one'; eassumption. *)
+    (*     + intuition. *)
+    (*   - destruct Hy. *)
+    (*     + subst. econstructor. 2: eassumption. *)
+    (*       eapply Paths_one'; eassumption. *)
+    (*     + apply Paths_sub. intuition. *)
+    (* Defined. *)
+
+
+    Lemma weight_Paths'_Paths {l x y} (p : Paths' l x y)
+      : weight (Paths'_Paths p) = weight' p.
+    Proof.
+      induction p; simpl.
+      apply weight_Paths_refl'.
+      apply weight_Paths_one'.
+    Abort.
+
+
+    Lemma lsp0_ge_weight l : forall x y (p : Paths l x y),
+        (Some (weight p) <= lsp0 l x y)%nbar.
+    Proof.
+      induction p; cbn -[le].
+      - destruct (get_edges x x).
+        destruct (V.eq_dec x x).
+        cbn; reflexivity. contradiction.
+        cbn; lia.
+      - apply get_edges_spec in i.
+        destruct (get_edges x y). inversion i.
+        now apply fold_max_le'.
+      - apply max_le'. right.
+        apply (plus_le_compat _ _ _ _ IHp1 IHp2).
+      - apply max_le'. left. assumption.
+      Qed.
+
+
+    Lemma lsp0_eq_weight l : forall x y n, lsp0 l x y = Some n ->
+        exists p : Paths l x y, weight p = n.
+    Proof.
+      induction l; cbn.
+      - intros x y n.
+        case_eq (get_edges x y).
+        + intro e. destruct (V.eq_dec x y).
+          intros H; apply some_inj in H; subst. exists (Paths_refl _). reflexivity.
+          discriminate.
+        + intros n0 l e H; apply some_inj in H; subst.
+          eexists (Paths_one _ _ _ _). reflexivity.
+          Unshelve. apply get_edges_spec. rewrite e.
+          exact (fold_max_In n0 _ l eq_refl).
+      - intros x y n H.
+        assert (HH : lsp0 l x y = Some n \/
+               exists n1 n2, lsp0 l x a = Some n1 /\ lsp0 l a y = Some n2 /\ n = n1 + n2).
+        admit.
+        destruct HH as [HH|[n1 [n2 [H1 [H2 H3]]]]].
+        apply IHl in HH. destruct HH as [p HH].
+        exists (Paths_sub _ _ _ _ p). exact HH.
+        apply IHl in H1; destruct H1 as [p1 H1].
+        apply IHl in H2; destruct H2 as [p2 H2].
+        exists (Paths_trans _ _ _ _ p1 p2). cbn.
+        rewrite H1, H2, H3; reflexivity.
+    Admitted.
+
 
     Context (HI : invariants).
 
-    Instance R''_trans : Transitive (R'' (VSet.elements (V G))).
+    Lemma Paths_trans' {l x y z} (Hy : InT y l)
+      : Paths l x y -> Paths l y z -> Paths l x z.
     Proof.
-      intros x y z H. induction H.
-      trivial.
-      intro H1. eapply r''_step; try eassumption.
-      apply proj1 in HI. specialize (HI _ H); apply proj2 in HI; cbn in HI.
-      apply VSetFact.elements_1, InA_alt in HI. 
-      now destruct HI as [? [[] HH]].
-      intro. eapply r''_step. eassumption.
-      apply proj1 in HI. specialize (HI _ H); apply proj2 in HI; cbn in HI.
-      apply VSetFact.elements_1, InA_alt in HI. 
-      now destruct HI as [? [[] HH]].
-      auto.
+      intros p q. apply Paths'_Paths.
+      apply Paths_Paths' in p. apply Paths_Paths' in q.
+      eapply Paths'_trans; eassumption.
+    Defined.
+
+    Definition R_Paths' x y : R x y -> ∥ Paths' (VSet.elements (V G)) x y ∥.
+    Proof.
+      destruct 1 as [n H]. sq. econstructor. eassumption.
+    Defined.
+
+    Definition Paths'_InV l x y : Paths' l x y -> (x = y) + VSet.In y (V G).
+    Proof.
+      intro p; induction p.
+      - now left.
+      - right. apply proj1 in HI. apply (HI _ i).
+      - right. destruct IHp.
+        subst. apply proj1 in HI. apply (HI _ i).
+        assumption.
     Qed.
 
-    Definition R''_ok x y : Rs x y <-> R'' (VSet.elements (V G)) x y.
+    Definition InA_InT {A} (HA : forall x y : A, {x = y} + {x <> y}) (x : A) l
+      : InA eq x l -> InT x l.
+    Proof.
+      induction l; intro H.
+      apply False_rect; inversion H.
+      destruct (HA a x). left; assumption.
+      right. apply IHl. inversion_clear H. intuition. assumption.
+    Defined.
+
+
+    Definition Rs_Paths' x y : Rs x y <-> ∥ Paths' (VSet.elements (V G)) x y ∥.
     Proof.
       split.
       - induction 1.
-        + destruct H as [n H]. eapply r''_step. eassumption.
-          apply proj1 in HI. specialize (HI _ H); apply proj2 in HI; cbn in HI.
-          apply VSetFact.elements_1, InA_alt in HI. 
-          now destruct HI as [? [[] HH]].
-          reflexivity.
-        + reflexivity.
-        + etransitivity; eassumption.
-      - induction 1.
+        + destruct H as [n H]. sq; eapply Paths'_one; eassumption.
+        + sq; reflexivity.
+        + sq. pose proof (Paths'_InV _ _ _ X0).
+          destruct H1. subst. assumption.
+          eapply Paths'_trans; try eassumption.
+          apply VSet.elements_spec1 in i.
+          apply InA_InT. apply V.eq_dec. assumption.
+      - destruct 1 as [X]. induction X.
         + reflexivity.
         + constructor. eexists; eassumption.
         + etransitivity. 2: eassumption.
           constructor; eexists; eassumption.
+    Defined.
+
+    Definition Rs_Paths x y : Rs x y <-> ∥ Paths (VSet.elements (V G)) x y ∥.
+    Proof.
+      etransitivity. eapply Rs_Paths'.
+      split; intro H; sq. now apply Paths'_Paths.
+      now apply Paths_Paths'.
     Qed.
 
-    Lemma d'_ok0 l : forall x y, Nbar.is_finite (d'0 l x y) -> Rs x y.
+    Lemma lsp0_finite_Rs l : forall x y, is_finite (lsp0 l x y) -> Rs x y.
     Proof.
       induction l; intros x y.
       - simpl. case_eq (get_edges x y).
@@ -393,31 +709,7 @@ Module WeightedGraph (V : UsualDecidableType).
         etransitivity; eapply IHl; eassumption.
     Qed.
 
-    Lemma R1s_Rs : forall x y z, R1s x y -> Rs y z -> R1s x z.
-    Proof.
-      intros x y z H1 H2; revert H1; induction H2; intuition.
-      destruct H as [[|n] H].
-      - revert H; induction H1.
-        + intro H1. constructor.
-          destruct H as [x1 [y1 [n1 H]]]. exists x1; exists y1; exists n1.
-          intuition. etransitivity. eassumption. constructor. assumption.
-        + intro. etransitivity. eassumption. intuition.
-      - etransitivity. eassumption. constructor. exists x0; exists y; exists n; easy.
-    Qed.
-
-    Lemma Rs_R1s : forall x y z, Rs x y -> R1s y z -> R1s x z.
-    Proof.
-      intros x y z H1 H2; induction H1; intuition.
-      destruct H as [[|n] H].
-      - revert H; induction H2.
-        + intro H2. constructor.
-          destruct H as [x1 [y1 [n1 H]]]. exists x1; exists y1; exists n1.
-          intuition. etransitivity. 2: eassumption. constructor. assumption.
-        + intro. etransitivity. 2: eassumption. intuition.
-      - etransitivity. 2: eassumption. constructor. exists x; exists y; exists n; easy.
-    Qed.
-
-    Lemma d'_ok1 l : forall x y, (is_pos (d'0 l x y)) -> R1s x y.
+    Lemma lsp0_pos_R1s l : forall x y, is_pos (lsp0 l x y) -> R1s x y.
     Proof.
       induction l; intros x y.
       - simpl. case_eq (get_edges x y).
@@ -438,14 +730,15 @@ Module WeightedGraph (V : UsualDecidableType).
           apply Nbar.is_finite_add in H1; destruct H1 as [H1 H1'].
           apply Nbar.is_pos_add in H; destruct H as [H|H].
           eapply R1s_Rs. eapply IHl; eassumption.
-          eapply d'_ok0; eassumption.
-          eapply Rs_R1s. eapply d'_ok0; eassumption. 
+          eapply lsp0_finite_Rs; eassumption.
+          eapply Rs_R1s. eapply lsp0_finite_Rs; eassumption. 
           eapply IHl; eassumption.
     Qed.
 
-    Lemma d'_ok2 (HG : forall x, ~ R1s x x) l x : d'0 l x x = Some 0.
+    Lemma lsp0_xx (HG : acyclic_no_loop) l
+      : VSet.For_all (fun x => lsp0 l x x = Some 0) (V G).
     Proof.
-      induction l.
+      intros x Hx; induction l.
       - simpl. case_eq (get_edges x x).
         intros _. case_eq (V.eq_dec x x); intuition.
         intros n l H.
@@ -453,79 +746,28 @@ Module WeightedGraph (V : UsualDecidableType).
         set (m := fold_left Nat.max l n) in *; clearbody m.
         change (In m (n :: l)) in X. rewrite <- H in X; clear H.
         destruct m; [reflexivity|].
-        apply False_rect, (HG x). constructor.
         apply get_edges_spec in X.
-        exists x; exists x; exists m. intuition.
+        apply False_rect, (HG x). assumption.
+        constructor. exists x; exists x; exists m. intuition.
       - simpl. rewrite IHl. simpl.
-        case_eq (d'0 l x a); case_eq (d'0 l a x); cbn; intros; try reflexivity.
+        case_eq (lsp0 l x a); case_eq (lsp0 l a x); cbn; intros; try reflexivity.
         destruct n, n0; cbn. reflexivity.
-        all: apply False_rect, (HG x).
+        all: apply False_rect, (HG x); try assumption.
         + eapply R1s_Rs.
-          eapply d'_ok1. rewrite H0. cbn; lia.
-          eapply d'_ok0. eexists; eassumption.
+          eapply lsp0_pos_R1s. rewrite H0. cbn; lia.
+          eapply lsp0_finite_Rs. eexists; eassumption.
         + eapply Rs_R1s.
-          eapply d'_ok0. eexists; eassumption.
-          eapply d'_ok1. rewrite H. cbn; lia.
-        + etransitivity; eapply d'_ok1.
+          eapply lsp0_finite_Rs. eexists; eassumption.
+          eapply lsp0_pos_R1s. rewrite H. cbn; lia.
+        + etransitivity; eapply lsp0_pos_R1s.
           rewrite H0; cbn; lia.
           rewrite H; cbn; lia.
     Qed.
 
-
-    Lemma d'_ok0' l : forall x y, R'' l x y -> is_finite (d'0 l x y).
-    Proof.
-      induction l; intros x y.
-      - induction 1; cbn.
-        + destruct (get_edges x x); [|eexists; reflexivity].
-          destruct (V.eq_dec x x); [eexists; reflexivity|].
-          contradiction.
-        + case_eq (get_edges x y); intros; [|eexists; reflexivity].
-          apply get_edges_spec in H.
-          rewrite H0 in H; inversion H.
-        + destruct (get_edges x y); [|eexists; reflexivity].
-          destruct (V.eq_dec x y); [eexists; reflexivity|].
-          intuition.
-      - intro H; simpl. apply Nbar.is_finite_max.
-        assert (HH : R'' l x y \/ (R'' l x a /\ R'' l a y)). {
-          clear IHl.
-          induction H.
-          + left; reflexivity.
-          + left; econstructor; eassumption.
-          + destruct IHR''.
-            * destruct H0.
-              -- subst. right. split; [|assumption].
-                 econstructor; eassumption.
-              -- left. eapply r''_step; eassumption.
-            * destruct H2 as [H2 H3]. right. split; [|assumption].
-              destruct H0.
-              -- subst. econstructor. eassumption.
-              -- eapply r''_step; eassumption. }
-        destruct HH as [HH|[H1 H2]]; [left|right].
-        eauto. apply Nbar.is_finite_add; eauto.
-    Qed.
-
-    Lemma fold_max_le n m l (H : n <= m \/ Exists (Peano.le n) l)
-      : n <= fold_left Nat.max l m.
-    Proof.
-      revert m H; induction l; cbn in *; intros m [H|H].
-      assumption. inversion H.
-      eapply IHl. left; lia.
-      eapply IHl. inversion_clear H.
-      left; lia. right; assumption.
-    Qed.
-
-    Lemma fold_max_le' n m l (H : In n (m :: l))
-      : n <= fold_left Nat.max l m.
-    Proof.
-      apply fold_max_le. destruct H.
-      left; lia. right. apply Exists_exists.
-      eexists. split. eassumption. reflexivity.
-    Qed.
-
-    Lemma d'_ok3 (HG : forall x, ~ R1s x x) l x y1 y2 n
+    Lemma lsp0_triangle_inequality (HG : acyclic_no_loop) l x y1 y2 n
           (He : EdgeSet.In (y1, n, y2) (E G))
           (Hy : In y1 l)
-      : (d'0 l x y1 + Some n <= d'0 l x y2)%nbar.
+      : (lsp0 l x y1 + Some n <= lsp0 l x y2)%nbar.
     Proof.
       revert x; induction l; intro x.
       - simpl. case_eq (get_edges x y1); cbn; intro H.
@@ -537,73 +779,207 @@ Module WeightedGraph (V : UsualDecidableType).
           now apply fold_max_le'.
         + inversion Hy.
       - simpl. destruct Hy.
-        + subst. rewrite (d'_ok2 HG), add_0_r, max_idempotent.
+        + subst. rewrite (lsp0_xx HG), add_0_r, max_idempotent.
           apply max_le'. right. apply plus_le_compat_l.
           clear -He HI. {
             induction l.
             * apply get_edges_spec in He. simpl.
               case_eq (get_edges y1 y2); intros; rewrite H in He.
               inversion He. now apply fold_max_le'. 
-            * change (Some n <= max (d'0 l y1 y2) (d'0 l y1 a + d'0 l a y2))%nbar.
+            * change (Some n <= max (lsp0 l y1 y2) (lsp0 l y1 a + lsp0 l a y2))%nbar.
               apply max_le'. now left. }
+          apply (proj1 HI _ He).
         + specialize (IHl H). rewrite <- add_max_distr_r.
           apply max_lub; apply  max_le'.
           * now left.
           * right. rewrite <- add_assoc. now apply plus_le_compat_l.
     Defined.
 
+    Lemma Paths_lsp0_finite l : forall x y, ∥ Paths l x y ∥ -> is_finite (lsp0 l x y).
+    Proof.
+      intros x y H; sq. pose proof (lsp0_ge_weight _ _ _ X).
+      revert H. destruct (lsp0 l x y).
+      intros. econstructor; reflexivity.
+      intuition.
+    Qed.
 
-    Lemma d'_ok (HG : forall x, ~ R1s x x) :
-        correct_labelling (fun x => option_get 0 (d' (s G) x)).
+    Lemma lsp_correctness (HG : acyclic_no_loop) :
+        correct_labelling (fun x => option_get 0 (lsp (s G) x)).
     Proof.
       split.
-      - unfold d'. now rewrite d'_ok2.
-      - intros [[x n] y] He; cbn. unfold d'.
-        simple refine (let H := d'_ok3 HG (VSet.elements (V G)) (s G) x y n He _
+      - unfold lsp. rewrite lsp0_xx. reflexivity. assumption.
+        apply HI.
+      - intros [[x n] y] He; cbn. unfold lsp.
+        simple refine (let H := lsp0_triangle_inequality
+                                  HG (VSet.elements (V G)) (s G) x y n He _
                        in _); [|clearbody H].
         apply proj1 in HI. specialize (HI _ He).
         apply proj1, InA_alt in HI. destruct HI as [? [[] ?]]; assumption.
-        simple refine (let H1 := d'_ok0' (VSet.elements (V G)) (s G) x _ in _);
+        simple refine (let H1 := Paths_lsp0_finite
+                                   (VSet.elements (V G)) (s G) x _ in _);
           [|destruct H1 as [n1 H1]].
-        apply R''_ok. apply HI.
+        apply Rs_Paths. apply HI.
         apply proj1 in HI. specialize (HI _ He); apply HI.
-        simple refine (let H2 := d'_ok0' (VSet.elements (V G)) (s G) y _ in _);
+        simple refine (let H2 := Paths_lsp0_finite
+                                   (VSet.elements (V G)) (s G) y _ in _);
           [|destruct H2 as [n2 H2]].
-        apply R''_ok. apply HI.
+        apply Rs_Paths. apply HI.
         apply proj1 in HI. specialize (HI _ He); apply HI.
         now rewrite H1, H2 in *.
     Defined.
 
     
     Lemma notR1s_correct_labelling
-      : (forall x, ~ R1s x x) -> exists l, correct_labelling l.
+      : acyclic_no_loop -> exists l, correct_labelling l.
     Proof.
-      intro HG; eexists. eapply (d'_ok HG).
+      intro HG; eexists. eapply (lsp_correctness HG).
     Defined.
 
-    Lemma notR1s_acyclic : (exists l, correct_labelling l) -> acyclic.
-      intros [l Hl]. eapply Wf_nat.well_founded_lt_compat.
-      exact (correct_labelling_R _ Hl).
+    (* Lemma weight_morphism x y z p1 p2 *)
+    (*   : weight (@Paths_trans x y z p1 p2) = weight p1 + weight p2. *)
+    (* Proof. *)
+    (*   induction p1; simpl. *)
+    (*   - reflexivity. *)
+    (*   - reflexivity. *)
+    (*   - rewrite IHp1; lia. *)
+    (* Qed. *)
+
+    Lemma R1s_Paths' x y (p : R1s x y)
+      : exists p : Paths' (VSet.elements (V G)) x y, 1 <= weight' p.
+    Proof.
+      induction p.
+      - destruct H as [x0 [y0 [n [H1 [H2 H3]]]]].
+        apply R0s_Rs, Rs_Paths' in H1; destruct H1.
+        apply R0s_Rs, Rs_Paths' in H3; destruct H3.
+        unshelve econstructor. eapply Paths'_trans; try eassumption.
+        admit.
+        eapply Paths'_trans; [| |eassumption].
+        admit.
+        eapply Paths'_one. eassumption.
+        rewrite !weight'_Paths'_trans. simpl. lia.
+      - destruct IHp1 as [p1' Hp1].
+        destruct IHp2 as [p2' Hp2].
+        unshelve econstructor.
+        eapply Paths'_trans; try eassumption. admit.
+        rewrite weight'_Paths'_trans. simpl. lia.
+    Admitted.
+
+    Lemma R1s_Paths x y (p : R1s x y)
+      : exists p : Paths (VSet.elements (V G)) x y, 1 <= weight p.
+    Proof.
+      induction p.
+      - destruct H as [x0 [y0 [n [H1 [H2 H3]]]]].
+        apply R0s_Rs, Rs_Paths in H1; destruct H1.
+        apply R0s_Rs, Rs_Paths in H3; destruct H3.
+        unshelve econstructor. eapply Paths_trans'; try eassumption.
+        admit.
+        eapply Paths_trans'; [| |eassumption].
+        admit.
+        eapply Paths_one'. eassumption.
+        (* rewrite weight_Paths_trans0 *)
+    Abort.
+
+    (** ** Main results about acyclicity *)
+
+    Lemma acyclic_caract1
+      : acyclic_no_loop <-> exists l, correct_labelling l.
+    Proof.
+      split. apply notR1s_correct_labelling.
+      intro. apply acyclic_wf_no_loop.
+      destruct H; eapply acyclic_labelling; eassumption.
     Defined.
 
-    Lemma d'_qsmlf : forall x y, R1s x y -> is_pos (d' x y).
+    Lemma acyclic_caract2
+      : acyclic_no_loop <-> acyclic_well_founded.
+    Proof.
+      split.
+      intro. eapply acyclic_labelling.
+      now eapply lsp_correctness.
+      apply acyclic_wf_no_loop.
+    Defined.
+
+    Lemma acyclic_caract3 :
+      acyclic_no_loop <-> (VSet.For_all (fun x => lsp x x = Some 0) (V G)).
+    Proof.
+      split.
+      - intros HG x Hx. apply lsp0_xx; assumption.
+      - intros H x Hx p.
+    (*     apply R1s_Paths in p. *)
+    (*     destruct p as [p' Hp']. *)
+    (*     pose proof (lsp0_ge_weight _ _ _ p'). rewrite H in H0. *)
+    (*     cbn in *; lia. assumption. *)
+    (* Qed. *)
+    Admitted.
+
+
+    Lemma VSet_Forall_reflect P f (Hf : forall x, reflect (P x) (f x)) s
+      : reflect (VSet.For_all P s) (VSet.for_all f s).
+    Proof.
+      apply iff_reflect. etransitivity.
+      2: apply VSetFact.for_all_iff.
+      2: intros x y []; reflexivity.
+      apply iff_forall; intro x.
+      apply iff_forall; intro Hx.
+      now apply reflect_iff.
+    Qed.
+
+    Lemma reflect_logically_equiv {A B} (H : A <-> B) f
+      : reflect B f -> reflect A f.
+    Proof.
+      destruct 1; constructor; intuition.
+    Qed.
+
+    Definition is_acyclic := VSet.for_all (fun x => match lsp x x with
+                                                 | Some 0 => true
+                                                 | _ => false
+                                                 end) (V G).
+
+    Lemma is_acyclic_correct : reflect acyclic_no_loop is_acyclic.
+    Proof.
+      eapply reflect_logically_equiv. eapply acyclic_caract3.
+      apply VSet_Forall_reflect; intro x.
+      destruct (lsp x x). destruct n. constructor; reflexivity.
+      all: constructor; discriminate.
+    Qed.
+    
+    Definition leq_vertices x y := forall l, correct_labelling l -> l x <= l y.
+
+    Lemma Rs_leq_vertices x y : Rs x y -> leq_vertices x y.
     Proof.
       induction 1.
-      - pose (d'_ok3).
-    Abort.
+      - intros l Hl. destruct H as [n H].
+        apply proj2 in Hl. specialize (Hl _ H); cbn in Hl.
+        lia.
+      - intros l Hl; reflexivity.
+      - intros l Hl; etransitivity.
+        now apply IHclos_refl_trans1.
+        now apply IHclos_refl_trans2.
+    Qed.
 
-    Lemma lqsdkf : (forall x, ~ R1s x x) <-> (forall x, d' x x = Some 0).
+    Lemma leq_vertices_lsp_finite (HG : acyclic_no_loop) x y :
+      leq_vertices x y -> is_finite (lsp x y).
     Proof.
-      split. intros; now apply d'_ok2.
-      intros H x p. 
-    Abort.
+      intros H.
+      specialize (H _ (lsp_correctness HG)). cbn in *.
+    Admitted.
 
+    Lemma leq_vertices_iff x y :
+      leq_vertices x y <-> (acyclic_no_loop -> is_finite (lsp x y)).
+    Proof.
+      split.
 
+    Definition is_leq_vertices x y := match lsp x y with
+                                      | Some _ => true
+                                      | None => false
+                                      end.
+
+    Lemma is_leq_vertices_correct x y
+      : reflect (leq_vertices x y) (is_leq_vertices x y).
+    Proof.
 
     (* Rs -> leq : facile *)
     (* leq -> d = Some : facile pq d correct_labelling *)
     (* d = Some _ -> Rs ?? *)
-
 
 End graph.
 

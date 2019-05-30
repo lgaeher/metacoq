@@ -1,8 +1,8 @@
-From Coq Require Import Bool Program List Ascii String OrderedType Lia.
+From Coq Require Import Bool Program List Ascii String OrderedType Arith Lia
+     ssreflect ssrbool ssrfun.
+Global Set Asymmetric Patterns.
+
 Import ListNotations.
-Require Import ssreflect.
-Set Asymmetric Patterns.
-Require Import Arith.
 
 (* Use \sum to input ∑ in Company Coq (it is not a sigma Σ). *)
 Notation "'∑' x .. y , p" := (sigT (fun x => .. (sigT (fun y => p%type)) ..))
@@ -15,8 +15,8 @@ Notation "( x ; y ; z )" := (x ; ( y ; z)).
 Notation "( x ; y ; z ; t )" := (x ; ( y ; (z ; t))).
 Notation "( x ; y ; z ; t ; u )" := (x ; ( y ; (z ; (t ; u)))).
 Notation "( x ; y ; z ; t ; u ; v )" := (x ; ( y ; (z ; (t ; (u ; v))))).
-Notation "x .1" := (@projT1 _ _ x) (at level 3, format "x '.1'").
-Notation "x .2" := (@projT2 _ _ x) (at level 3, format "x '.2'").
+Notation "x ..1" := (@projT1 _ _ x) (at level 3, format "x '..1'").
+Notation "x ..2" := (@projT2 _ _ x) (at level 3, format "x '..2'").
 
 Notation "x × y" := (prod x y )(at level 80, right associativity).
 
@@ -24,9 +24,6 @@ Notation "#| l |" := (List.length l) (at level 0, l at level 99, format "#| l |"
 
 (* \circ *)
 Notation "g ∘ f" := (fun x => g (f x)).
-
-(** We cannot use ssrbool as it breaks extraction. *)
-Coercion is_true : bool >-> Sortclass.
 
 Definition pred (A : Type) := A -> bool.
 
@@ -50,6 +47,14 @@ Record isEquiv (A B : Type) :=
 Infix "<~>" := isEquiv (at level 90).
 
 Record squash (A : Type) : Prop := sq { _ : A }.
+
+Notation "∥ T ∥" := (squash T) (at level 10).
+Arguments sq {_} _.
+
+Ltac sq :=
+  repeat match goal with
+  | H : ∥ _ ∥ |- _ => destruct H
+  end; try eapply sq.
 
 Definition on_snd {A B C} (f : B -> C) (p : A * B) :=
   (fst p, f (snd p)).
@@ -1621,42 +1626,57 @@ Module NEL.
   (* Definition t (A : Set) := {l : list A & #|l| > 0}. *)
 
   (* Program Definition map {A B : Set} (f : A -> B) : t A -> t B *)
-  (*   := fun l => (List.map f l.1; _). *)
+  (*   := fun l => (List.map f l..1; _). *)
   (* Next Obligation. *)
-  (*   rewrite map_length. exact l.2. *)
+  (*   rewrite map_length. exact l..2. *)
   (* Defined. *)
 
   (* Definition make {A} x l : t A *)
   (*   := (x :: l; gt_Sn_O _). *)
 
   (* Definition cons {A} x (l : t A) : t A *)
-  (*   := make x l.1. *)
+  (*   := make x l..1. *)
 
   (* Definition eq {A} (l l' : t A) *)
-  (*   : l.1 = l'.1 -> l = l'. *)
+  (*   : l..1 = l'..1 -> l = l'. *)
   (* Proof. *)
   (*   destruct l as [l Hl], l' as [l' Hl']; cbn. *)
   (*   destruct 1. now rewrite (le_hset Hl Hl'). *)
   (* Qed. *)
 
   (* Program Definition app {A} (l l' : t A) : t A *)
-  (*   := (l.1 ++ l'.1; _). *)
+  (*   := (l..1 ++ l'..1; _). *)
   (* Next Obligation. *)
-  (*   rewrite app_length. pose proof l.2. cbn in *. omega. *)
+  (*   rewrite app_length. pose proof l..2. cbn in *. omega. *)
   (* Qed. *)
 
   (* Program Definition app_l {A} (l : t A) (l' : list A) : t A *)
-  (*   := (l.1 ++ l'; _). *)
+  (*   := (l..1 ++ l'; _). *)
   (* Next Obligation. *)
-  (*   rewrite app_length. pose proof l.2. cbn in *. omega. *)
+  (*   rewrite app_length. pose proof l..2. cbn in *. omega. *)
   (* Qed. *)
 
   (* Program Definition app_r {A : Set} (l : list A) (l' : t A) : t A *)
-  (*   := (l ++ l'.1; _). *)
+  (*   := (l ++ l'..1; _). *)
   (* Next Obligation. *)
-  (*   rewrite app_length. pose proof l'.2. cbn in *. omega. *)
+  (*   rewrite app_length. pose proof l'..2. cbn in *. omega. *)
   (* Qed. *)
 
 End NEL.
 
 Definition non_empty_list := NEL.t.
+
+
+Lemma iff_forall {A} B C (H : forall x : A, B x <-> C x)
+  : (forall x, B x) <-> (forall x, C x).
+  firstorder.
+Defined.
+
+Lemma iff_ex {A} B C (H : forall x : A, B x <-> C x)
+  : (ex B) <-> (ex C).
+  firstorder.
+Defined.
+
+Lemma if_true_false (b : bool) : (if b then true else false) = b.
+  destruct b; reflexivity.
+Qed.

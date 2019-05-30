@@ -6,20 +6,6 @@ From Template Require Import utils config Universes wGraph monad_utils.
 Import ConstraintType. Import MonadNotation.
 Local Open Scope nat_scope.
 
-Lemma iff_forall {A} B C (H : forall x : A, B x <-> C x)
-  : (forall x, B x) <-> (forall x, C x).
-  firstorder.
-Defined.
-
-Lemma iff_ex {A} B C (H : forall x : A, B x <-> C x)
-  : (ex B) <-> (ex C).
-  firstorder.
-Defined.
-
-Lemma if_true_false (b : bool) : (if b then true else false) = b.
-  destruct b; reflexivity.
-Qed.
-
 
 Module ConstraintSetFact := WFactsOn UnivConstraintDec ConstraintSet.
 Module ConstraintSetProp := WPropertiesOn UnivConstraintDec ConstraintSet.
@@ -248,6 +234,45 @@ Proof.
         now rewrite H.
 Qed.
 
+(* Lemma gc_of_constraints_spec v ctrs : *)
+(*   satisfies v ctrs <-> on_Some (gc_satisfies v) (gc_of_constraints ctrs). *)
+(* Proof. *)
+
+Lemma gc_consistent_iff ctrs :
+  consistent ctrs <-> on_Some gc_consistent (gc_of_constraints ctrs).
+Proof.
+  split.
+  - intros [v H]. apply gc_of_constraints_spec in H.
+    inversion H. constructor. exists v. assumption.
+  - intro H; inversion H. destruct H1 as [v H1].
+    exists v. apply gc_of_constraints_spec. rewrite <- H0.
+    constructor. assumption.
+Qed.
+
+Definition gc_leq_universe0 ctrs u u'
+  := forall v, gc_satisfies v ctrs -> (val v u <= val v u')%Z.
+
+
+Lemma gc_leq_universe0_iff ctrs u u' :
+  leq_universe0 ctrs u u' <-> match gc_of_constraints ctrs with
+                               | Some ctrs => gc_leq_universe0 ctrs u u'
+                               | None => True
+                               end.
+Proof.
+  split.
+  - intro H. case_eq (gc_of_constraints ctrs); [|trivial].
+    intros ctrs' e v Hv. apply H. apply gc_of_constraints_spec.
+    rewrite e. constructor. assumption.
+  - case_eq (gc_of_constraints ctrs).
+    intros ctrs' e H v Hv. apply H.
+    apply gc_of_constraints_spec in Hv.
+    rewrite e in Hv. inversion_clear Hv. assumption.
+    intros e _ v Hv.
+    apply gc_of_constraints_spec in Hv.
+    rewrite e in Hv. inversion_clear Hv.
+Defined.
+
+
 
 (* vertices of the graph are levels which are not Prop *)
 (* ltv : level to vertice *)
@@ -353,8 +378,6 @@ Ltac simplify_sets :=
   | H : EdgeSet.In ?A EdgeSet.empty |- _
     => apply EdgeSetFact.empty_iff in H; contradiction
   end.
-
-  
 
 
 Lemma add_edges_invariants {G} (HG : invariants G) (HG' : wGraph.s G = lSet) {gc}
@@ -536,38 +559,6 @@ Section Spec.
     destruct g; reflexivity.
   Qed.
 
-  Definition make_graph_edge
-    : forall x, VSet.In (ltv x) (wGraph.V G) -> EdgeSet.In (edge_of_level x) (wGraph.E G).
-  Proof.
-    subst G; apply make_graph_ind; clear ctrs.
-    - cbn. intros x H. simplify_sets. inversion H.
-    - intros G gc HG l H.
-      destruct gc; cbn in *; simplify_sets.
-      + rewrite !source_edge_of_level, !target_edge_of_level in H. right.
-        destruct H. apply ltv_inj in H. subst; auto.
-        destruct H. apply ltv_inj in H. subst; auto.
-        destruct H. inversion H.
-        destruct H. apply ltv_inj in H. subst; auto.
-        destruct H. inversion H.
-        destruct H. apply ltv_inj in H. subst; auto.
-        firstorder.
-      + rewrite !source_edge_of_level, !target_edge_of_level in H. right.
-        destruct H. apply ltv_inj in H. subst; auto.
-        destruct H. apply ltv_inj in H. subst; auto.
-        destruct H. inversion H.
-        destruct H. apply ltv_inj in H. subst; auto.
-        destruct H. inversion H.
-        destruct H. apply ltv_inj in H. subst; auto.
-        firstorder.
-      + destruct H. inversion H.
-        destruct H. apply ltv_inj in H; subst. cbn. admit.
-        firstorder.
-      + destruct H. inversion H.
-        destruct H. apply ltv_inj in H; subst. auto.
-        destruct H. apply ltv_inj in H; subst. auto.
-        destruct H. inversion H. firstorder.
-  Abort.
-
 
   Lemma valuation_labelling_eq l (Hl : correct_labelling G l)
     : forall x, VSet.In x (wGraph.V G)
@@ -733,11 +724,11 @@ End Spec.
 
 Definition G := make_graph
   (GoodConstraintSet.add (gc_lt (mVar 0) (mVar 1))
- (GoodConstraintSet_pair (gc_lt_set 0) (gc_lt_set 1))).
+ (GoodConstraintSet_pair (gc_lt_set 0) (gc_eq_set 1))).
 
-Compute (d' G lSet (mVar 0)).
-Compute (d' G lSet (mVar 1)).
-Compute (d' G lSet lSet).
+Compute (lsp G lSet (mVar 0)).
+Compute (lsp G lSet (mVar 1)).
+Compute (lsp G lSet lSet).
 
 (* Section Test. *)
 
