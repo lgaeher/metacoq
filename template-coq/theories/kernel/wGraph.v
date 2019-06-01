@@ -1,6 +1,7 @@
-Require Import Peano_dec Nat Bool List Relations Structures.Equalities
-        MSets.MSetWeakList MSetFacts MSetProperties Lia.
-From Template Require Import utils monad_utils.
+Require Import Peano_dec Nat Bool List Structures.Equalities Lia
+        MSets.MSetList MSetFacts MSetProperties.
+Require Import ssrbool ssrfun.
+ From Template Require Import utils monad_utils.
 
 Inductive on_Some {A} (P : A -> Prop) : option A -> Prop :=
 | on_some : forall x, P x -> on_Some P (Some x).
@@ -95,6 +96,16 @@ Module Nbar.
 
   Local Open Scope nbar_scope.
 
+  Instance le_refl : Reflexive le.
+  Proof.
+    intro x; destruct x; cbn; reflexivity.
+  Defined.
+
+  Instance le_trans : Transitive le.
+  Proof.
+    intros [x|] [y|] [z|]; cbn; intuition.
+  Defined.
+
   Definition is_finite (n : t) := is_Some n.
   Definition is_finite_max (n m : t)
     : is_finite (max n m) <-> is_finite n \/ is_finite m.
@@ -183,12 +194,49 @@ Module Nbar.
     destruct n; try reflexivity; cbn.
     now rewrite PeanoNat.Nat.max_idempotent.
   Defined.
+
+  Lemma eq_max n m k (H : max n m = k) : n = k \/ m = k.
+  Proof.
+    destruct n, m, k; cbn in H.
+    apply some_inj in H. apply eq_max in H.
+    all: try discriminate; intuition.
+  Qed.
+
+  Lemma fold_max_In n m l (H : fold_left max l n = m)
+    : n = m \/ In m l.
+  Proof.
+    revert n H; induction l; cbn; intros n H.
+    intuition.
+    apply IHl in H.
+    apply or_assoc. destruct H; [left|now right].
+    now apply eq_max.
+  Qed.
+
+  Lemma fold_max_le n m l (H : n <= m \/ Exists (le n) l)
+    : n <= fold_left max l m.
+  Proof.
+    revert m H; induction l; cbn in *; intros m [H|H].
+    assumption. inversion H.
+    eapply IHl. left. apply max_le'; now left.
+    eapply IHl. inversion_clear H.
+    left. apply max_le'; now right.
+    right; assumption.
+  Qed.
+
+  Lemma fold_max_le' n m l (H : In n (m :: l))
+    : n <= fold_left max l m.
+  Proof.
+    apply fold_max_le. destruct H.
+    left; subst; reflexivity.
+    right. apply Exists_exists.
+    eexists. split. eassumption. reflexivity.
+  Qed.
+
 End Nbar.
 
-Require Import MSets.MSetList.
 
 Module WeightedGraph (V : UsualOrderedType).
-  Module VSet := MSets.MSetList.Make V.
+  Module VSet := MSetList.Make V.
   (* todo: remove if unused *)
   Module VSetFact := WFactsOn V VSet.
   Module VSetProp := WPropertiesOn V VSet.
@@ -270,20 +318,13 @@ Module WeightedGraph (V : UsualOrderedType).
   Section graph.
     Context (G : t).
 
-    Definition R (x y : V.t) := exists n, EdgeSet.In (x, n, y) (E G).
-
-    Definition Rs := clos_refl_trans _ R.
-
-    Global Instance Rs_refl : Reflexive Rs := rt_refl _ _.
-    Global Instance Rs_trans : Transitive Rs := rt_trans _ _.
-
     Definition invariants :=
       (* E ⊆ V × V *)
-      (forall e, EdgeSet.In e (E G) -> VSet.In e..s (V G) /\ VSet.In e..t (V G))
-      (* s ∈ V *)
-      /\  VSet.In (s G) (V G)
-      (* s is a source *)
-      /\ (forall x, VSet.In x (V G) -> Rs (s G) x).
+      (forall e, EdgeSet.In e (E G) -> VSet.In e..s (V G) /\ VSet.In e..t (V G)).
+      (* (* s ∈ V *) *)
+      (* /\  VSet.In (s G) (V G) *)
+      (* (* s is a source *) *)
+      (* /\ (forall x, VSet.In x (V G) -> Rs (s G) x). *)
 
     Definition add_node x : t :=
       (VSet.add x (V G), (E G), (s G)).
@@ -291,68 +332,358 @@ Module WeightedGraph (V : UsualOrderedType).
     Definition add_edge e : t :=
       (VSet.add e..s (VSet.add e..t (V G)), EdgeSet.add e (E G), (s G)).
 
+    Definition Edges x y := ∑ n, EdgeSet.In (x, n, y) (E G).
 
-    Definition R0 (x y : V.t) := EdgeSet.In (x, 0, y) (E G).
+    Inductive Paths : V.t -> V.t -> Type :=
+    | paths_refl x : Paths x x
+    | paths_step x y z : Edges x y -> Paths y z -> Paths x z.
 
-    (* exists a paths of weight 0 *)
-    Definition R0s := clos_refl_trans _ R0.
+    Arguments paths_step {x y z} e p.
 
-    Global Instance R0s_refl : Reflexive R0s := rt_refl _ _.
-    Global Instance R0s_trans : Transitive R0s := rt_trans _ _.
+    Fixpoint weight {x y} (p : Paths x y) :=
+      match p with
+      | paths_refl x => 0
+      | paths_step x y z e p => e..1 + weight p
+      end.
 
-    Definition R0s_Rs x y : R0s x y -> Rs x y.
+    Fixpoint nodes {x y} (p : Paths x y) : VSet.t :=
+      match p with
+      | paths_refl x => VSet.empty
+      | paths_step x y z e p => VSet.add x (nodes p)
+      end.
+
+    Fixpoint concat {x y z} (p : Paths x y) : Paths y z -> Paths x z :=
+      match p with
+      | paths_refl _ => fun q => q
+      | paths_step _ _ _ e p => fun q => paths_step e (concat p q)
+      end.
+
+    Fixpoint length {x y} (p : Paths x y) :=
+      match p with
+      | paths_refl x => 0
+      | paths_step x y z e p => S (length p)
+      end.
+
+    Global Instance Paths_refl : CRelationClasses.Reflexive Paths := paths_refl.
+    Global Instance Paths_trans : CRelationClasses.Transitive Paths := @concat.
+
+    Definition PosPaths x y := exists p : Paths x y, weight p > 0.
+
+    Definition DisjointAdd x s s' := VSetProp.Add x s s' /\ ~ VSet.In x s.
+
+    Inductive SimplePaths : VSet.t -> V.t -> V.t -> Type :=
+    | spaths_refl s x : SimplePaths s x x
+    | spaths_step s s' x y z : DisjointAdd x s s' -> Edges x y
+                               -> SimplePaths s y z -> SimplePaths s' x z.
+
+    Arguments spaths_step {s s' x y z} H e p.
+
+    Global Instance SimplePaths_refl s : CRelationClasses.Reflexive (SimplePaths s)
+      := spaths_refl s.
+
+    Fixpoint to_paths {s x y} (p : SimplePaths s x y) : Paths x y :=
+      match p with
+      | spaths_refl _ x => paths_refl x
+      | spaths_step _ _ x y z _ e p => paths_step e (to_paths p)
+      end.
+
+    Fixpoint sweight {s x y} (p : SimplePaths s x y) :=
+      match p with
+      | spaths_refl _ _ => 0
+      | spaths_step _ _ x y z _ e p => e..1 + sweight p
+      end.
+
+    Fixpoint is_simple {x y} (p : Paths x y) :=
+      match p with
+      | paths_refl x => true
+      | paths_step x y z e p => negb (VSet.mem x (nodes p)) && is_simple p
+      end.
+
+    Program Fixpoint to_simple {x y} (p : Paths x y) (Hp : is_simple p = true)
+            {struct p} : SimplePaths (nodes p) x y :=
+      match p with
+      | paths_refl x => spaths_refl _ _
+      | paths_step x y z e p => spaths_step _ e (to_simple p _)
+      end.
+    Next Obligation.
+      split. eapply VSetProp.Add_add.
+      apply (JMeq.JMeq_congr is_simple) in Heq_p.
+      rewrite Hp in Heq_p. cbn in Heq_p; apply andb_prop, proj1 in Heq_p.
+      now apply ssrbool.negbTE, VSetFact.not_mem_iff in Heq_p.
+    Defined.
+    Next Obligation.
+      apply (JMeq.JMeq_congr is_simple) in Heq_p.
+      rewrite Hp in Heq_p. cbn in Heq_p; now apply andb_prop, proj2 in Heq_p.
+    Defined.
+
+    Lemma DisjointAdd_add {s s' x y} (H : DisjointAdd x s s') (H' : x <> y)
+      : DisjointAdd x (VSet.add y s) (VSet.add y s').
     Proof.
-      induction 1.
-      - constructor. exists 0; assumption.
-      - reflexivity.
-      - etransitivity; eauto.
+      repeat split. 2: intros [H0|H0].
+     - intro H0. apply VSet.add_spec in H0.
+       destruct H0 as [H0|H0].
+       right; subst; apply VSet.add_spec; left; reflexivity.
+       apply H in H0. destruct H0 as [H0|H0]; [left; assumption |right].
+       apply VSet.add_spec; right; assumption.
+     - subst. apply VSet.add_spec; right. apply H; left; reflexivity.
+     - apply VSet.add_spec in H0; apply VSet.add_spec; destruct H0 as [H0|H0].
+       left; assumption. right. apply H. right; assumption.
+     - intro H0. apply VSet.add_spec in H0; destruct H0 as [H0|H0].
+       contradiction. now apply H.
     Qed.
 
-    (* exists a path with one positive edge *)
-    Definition R1 (x y : V.t) :=
-      exists x0 y0 n, R0s x x0 /\ EdgeSet.In (x0, S n, y0) (E G) /\ R0s y0 y.
 
-    Definition R1s := clos_trans _ R1.
+    Program Fixpoint add_end {s x y} (p : SimplePaths s x y)
+      : forall {z} (e : Edges y z) (Hy : ~ VSet.In y s), SimplePaths (VSet.add y s) x z
+      := match p with
+         | spaths_refl s x => fun z e Hy => spaths_step _ e (spaths_refl _ _)
+         | spaths_step s s' _ _ _ H e p
+           => fun z e' Hy => spaths_step _ e (add_end p e' _)
+         end.
+    Next Obligation.
+      cbn. split. apply VSetProp.Add_add. assumption.
+    Defined.
+    Next Obligation.
+      apply DisjointAdd_add. assumption.
+      intro HH; apply Hy.  apply H. left; assumption.
+    Defined.
+    Next Obligation.
+      intro HH. apply Hy. apply H. right; assumption.
+    Defined.
 
-    Global Instance R1s_trans : Transitive R1s := t_trans _ _.
+    Axiom myadmit : forall {A}, A.
 
-    Lemma R1s_Rs : forall x y z, R1s x y -> Rs y z -> R1s x z.
+    Lemma DisjointAdd_remove {s s' x y} (H : DisjointAdd x s s') (H' : x <> y)
+      : DisjointAdd x (VSet.remove y s) (VSet.remove y s').
     Proof.
-      intros x y z H1 H2; revert H1; induction H2; intuition.
-      destruct H as [[|n] H].
-      - revert H; induction H1.
-        + intro H1. constructor.
-          destruct H as [x1 [y1 [n1 H]]]. exists x1; exists y1; exists n1.
-          intuition. etransitivity. eassumption. constructor. assumption.
-        + intro. etransitivity. eassumption. intuition.
-      - etransitivity. eassumption. constructor. exists x0; exists y; exists n; easy.
+      repeat split. 2: intros [H0|H0].
+     - intro H0. apply VSet.remove_spec in H0.
+       destruct H0 as [H0 H1].
+       pose proof ((H.1 y0).1 H0) as H2.
+       destruct H2; [now left|right].
+       apply VSetFact.remove_2; intuition.
+     - subst. apply VSet.remove_spec. split; [|assumption].
+       apply H.1. left; reflexivity.
+     - apply VSet.remove_spec in H0; destruct H0 as [H0 H1].
+       apply VSet.remove_spec; split; [|assumption].
+       apply H.1. right; assumption.
+     - intro H0. apply VSet.remove_spec in H0; destruct H0 as [H0 _].
+       apply H; assumption.
     Qed.
 
-    Lemma Rs_R1s : forall x y z, Rs x y -> R1s y z -> R1s x z.
+
+
+   Program Fixpoint split {s x y} (p : SimplePaths s x y)
+     : SimplePaths (VSet.remove y s) x y * ∑ s', SimplePaths s' y y :=
+      match p with
+      | spaths_refl s x => (spaths_refl _ x, (VSet.empty; spaths_refl _ x))
+      | spaths_step s s' x0 y0 z0 H e p0
+        => match V.eq_dec x y with
+          | left pp => (spaths_refl _ x0, (_; p))
+          | right pp => (spaths_step _ e (split p0).1, (split p0).2)
+          end
+      end.
+   Next Obligation.
+     now apply DisjointAdd_remove.
+   Defined.
+ 
+    Program Fixpoint simplify {s x y} (q : Paths y x)
+      : SimplePaths s x y -> ∑ x' s', SimplePaths s' x' x' :=
+      match q with
+      | paths_refl x => fun p => (x; s; p)
+      | paths_step y y' _ e q =>
+        fun p => match VSet.mem y s with
+              | true => let '(p1, p2) := split p in
+                       if 0 <? sweight (p2..2) then (_; p2)
+                       else simplify q (@add_end _ _ _ p1 _ e _)
+              | false => @simplify _ _ _ q (@add_end _ _ _ p _ e _)
+              end
+      end.
+    Next Obligation.
+      apply VSetProp.FM.remove_1; reflexivity.
+    Defined.
+    Next Obligation.
+      now apply VSetFact.not_mem_iff.
+    Defined.
+
+    Import Nbar.
+
+    (* Definition preds (y : V.t) : list (V.t * nat) *)
+    (*   := let l := List.filter (fun e => V.eq_dec e..t y) (EdgeSet.elements (E G)) in *)
+    (*      List.map fst l. *)
+
+    (* (* lsp = longest simple path *) *)
+    (* (* l is the list of authorized intermediate nodes *) *)
+    (* (* lsp0 (a::l) x y = max (lsp0 l x y) (lsp0 l x a + lsp0 l a y) *) *)
+    (* Program Fixpoint lsp0 (s : VSet.t) (x z : V.t) {measure (VSet.cardinal s)} *)
+    (*   : Nbar.t := *)
+    (*   let base := if V.eq_dec x z then Some 0 else None in *)
+    (*   List.fold_left *)
+    (*     (fun m '(y, n) => match VSet.mem y s with *)
+    (*                    | true => Nbar.max m (Some n + lsp0 (VSet.remove y s) x y)%nbar *)
+    (*                    | false => m end) *)
+    (*     (preds z) base. *)
+    (* Next Obligation. *)
+    (*   symmetry in Heq_anonymous; apply VSet.mem_spec in Heq_anonymous. *)
+    (*   apply VSetProp.remove_cardinal_1 in Heq_anonymous. lia. *)
+    (* Defined. *)
+
+    (* Lemma lsp0_eq s x z : lsp0 s x z = *)
+    (*   let base := if V.eq_dec x z then Some 0 else None in *)
+    (*   List.fold_left *)
+    (*     (fun m '(y, n) => match VSet.mem y s with *)
+    (*                    | true => Nbar.max m (Some n + lsp0 (VSet.remove y s) x y)%nbar *)
+    (*                    | false => m end) *)
+    (*     (preds z) base. *)
+    (* Proof. *)
+    (* Admitted. *)
+
+    Definition succs (x : V.t) : list (nat * V.t)
+      := let l := List.filter (fun e => V.eq_dec e..s x) (EdgeSet.elements (E G)) in
+         List.map (fun e => (e..w, e..t)) l.
+
+    (* lsp = longest simple path *)
+    (* l is the list of authorized intermediate nodes *)
+    (* lsp0 (a::l) x y = max (lsp0 l x y) (lsp0 l x a + lsp0 l a y) *)
+    Program Fixpoint lsp0 (s : VSet.t) (x z : V.t) {measure (VSet.cardinal s)}
+      : Nbar.t :=
+      let base := if V.eq_dec x z then Some 0 else None in
+      match VSet.mem x s with
+      | true =>
+        let ds := List.map (fun '(n, y) => Some n + lsp0 (VSet.remove x s) y z)%nbar
+                           (succs x) in
+        List.fold_left Nbar.max ds base
+      | false => base end.
+    Next Obligation.
+      symmetry in Heq_anonymous0; apply VSet.mem_spec in Heq_anonymous0.
+      apply VSetProp.remove_cardinal_1 in Heq_anonymous0. lia.
+    Defined.
+
+    Lemma lsp0_eq s x z : lsp0 s x z =
+      let base := if V.eq_dec x z then Some 0 else None in
+      match VSet.mem x s with
+      | true =>
+        let ds := List.map (fun '(n, y) => Some n + lsp0 (VSet.remove x s) y z)%nbar
+                           (succs x) in
+        List.fold_left Nbar.max ds base
+      | false => base end.
     Proof.
-      intros x y z H1 H2; induction H1; intuition.
-      destruct H as [[|n] H].
-      - revert H; induction H2.
-        + intro H2. constructor.
-          destruct H as [x1 [y1 [n1 H]]]. exists x1; exists y1; exists n1.
-          intuition. etransitivity. 2: eassumption. constructor. assumption.
-        + intro. etransitivity. 2: eassumption. intuition.
-      - etransitivity. 2: eassumption. constructor. exists x; exists y; exists n; easy.
+    Admitted.
+
+    Definition lsp := lsp0 (V G).
+
+    Arguments Nbar.le _ _ : simpl nomatch.
+
+    Lemma lsp0_VSet_Equal {s s' x y} :
+      VSet.Equal s s' -> lsp0 s x y = lsp0 s' x y.
+    Admitted.
+
+    Lemma InAeq_In {A} (l : list A) x :
+      InA eq x l <-> In x l.
+    Proof.
+      etransitivity. eapply InA_alt. firstorder. now subst.
+    Defined.
+    
+    Lemma lsp0_le {s x y} (p : SimplePaths s x y)
+      : (Some (sweight p) <= lsp0 s x y)%nbar.
+    Proof.
+      induction p; rewrite lsp0_eq; simpl.
+      - destruct (V.eq_dec x x); [|contradiction].
+        destruct (VSet.mem x s0); [|cbn; reflexivity].
+        match goal with
+        | |- (_ <= fold_left ?F _ _)%nbar =>
+          assert (XX: (forall l acc, Some 0 <= acc -> Some 0 <= fold_left F l acc)%nbar);
+            [|apply XX; cbn; reflexivity]
+        end.
+        clear; induction l.
+        + cbn; trivial.
+        + intros acc H; simpl. apply IHl.
+          apply max_le'; now left.
+      - assert (ee: VSet.mem x s' = true). {
+          apply VSet.mem_spec, d. left; reflexivity. }
+        rewrite ee. etransitivity.
+        eapply (plus_le_compat (Some e..1) _ (Some (sweight p))).
+        reflexivity. eassumption.
+        apply Nbar.fold_max_le'.
+        right.
+        unfold succs. rewrite map_map_compose.
+        apply in_map_iff. exists (x, e..1, y). simpl.
+        split.
+        + cbn -[lsp0].
+          assert (XX: VSet.Equal (VSet.remove x s') s0). {
+            clear -d.
+            intro a; split; intro Ha.
+            * apply VSet.remove_spec in Ha. pose proof (d.1 a).
+              intuition.
+            * apply VSet.remove_spec. split.
+              apply d. right; assumption.
+              intro H. apply proj2 in d. apply d. subst; assumption. }
+          rewrite (lsp0_VSet_Equal XX); reflexivity.
+        + apply filter_In. split.
+          apply InAeq_In, EdgeSet.elements_spec1. exact e..2.
+          cbn. destruct (V.eq_dec x x); [reflexivity|contradiction].
     Qed.
 
-    Definition acyclic_well_founded := well_founded R1.
-    Definition acyclic_no_loop := VSet.For_all (fun x => ~ R1s x x) (V G).
+    Lemma lsp0_eq' {s x y} n
+      : lsp0 s x y = Some n -> exists p : SimplePaths s x y, sweight p = n.
+    Proof.
+      set (c := VSet.cardinal s). assert (e: VSet.cardinal s = c) by reflexivity.
+      clearbody c; revert s e x y n.
+      induction c using Wf_nat.lt_wf_ind.
+      rename H into IH.
+      intros s e x y n H. 
+      rewrite lsp0_eq in H; cbn -[lsp0] in H.
+      case_eq (VSet.mem x s); intro Hx; rewrite Hx in H.
+      - apply fold_max_In in H. destruct H.
+        + destruct (V.eq_dec x y); [|discriminate].
+          apply some_inj in H; subst.
+          unshelve eexists; reflexivity.
+        + apply in_map_iff in H.
+          destruct H as [[x' n'] [H1 H2]].
+          case_eq (lsp0 (VSet.remove x s) n' y).
+          2: intros ee; rewrite ee in H1; discriminate.
+          intros nn ee; rewrite ee in H1.
+          eapply IH in ee. 3: reflexivity.
+          * destruct ee as [p1 Hp1].
+            unfold succs in H2.
+            apply in_map_iff in H2.
+            destruct H2 as [[[x'' n''] y''] [H2 H2']]; cbn in H2.
+            inversion H2; subst; clear H2.
+            apply filter_In in H2'; destruct H2' as [H2 H2']; cbn in H2'.
+            destruct (V.eq_dec x'' x); [subst|discriminate]; clear H2'.
+            unshelve eexists. econstructor.
+            3: eassumption.
+            -- split. 2: apply VSetFact.remove_1; reflexivity.
+               apply VSetProp.Add_remove.
+               apply VSet.mem_spec; assumption.
+            -- eexists.
+               apply (EdgeSet.elements_spec1 _ _).1, InAeq_In; eassumption.
+            -- cbn. now apply some_inj in H1.
+          * subst. clear -Hx. apply VSet.mem_spec in Hx.
+            apply VSetProp.remove_cardinal_1 in Hx. lia.
+      - destruct (V.eq_dec x y); [|discriminate].
+        apply some_inj in H; subst. unshelve eexists; reflexivity.
+    Qed.
+
+
+
+
+    Definition acyclic_well_founded := well_founded PosPaths.
+    (* Definition acyclic_no_loop := VSet.For_all (fun x => ~ R1s x x) (V G). *)
+    Definition acyclic_no_loop := forall x, ~ (PosPaths x x).
 
     Lemma acyclic_wf_no_loop : acyclic_well_founded -> acyclic_no_loop.
     Proof.
-      intros H x _. induction (H x).
-      intros p. apply clos_trans_tn1 in p.
-      inversion_clear p.
-      + eapply H1. exact H2. now constructor.
-      + eapply H1. exact H2.
-        etransitivity. constructor; eassumption.
-        now apply clos_tn1_trans.
-    Qed.
+      intros H x. induction (H x).
+      intros [p Hp].
+      destruct p; cbn in Hp. lia.
+      
+    (*   + eapply H1. exact H2. now constructor. *)
+    (*   + eapply H1. exact H2. *)
+    (*     etransitivity. constructor; eassumption. *)
+    (*     now apply clos_tn1_trans. *)
+    (* Qed. *)
+    Abort.
 
     Definition correct_labelling (l : labelling) :=
       l (s G) = 0 /\
