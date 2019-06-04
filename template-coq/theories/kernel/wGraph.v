@@ -473,70 +473,90 @@ Module WeightedGraph (V : UsualOrderedType).
 
 
 
-   Program Fixpoint split {s x y} (p : SimplePaths s x y)
+   Fixpoint split {s x y} (p : SimplePaths s x y)
      : SimplePaths (VSet.remove y s) x y * ∑ s', SimplePaths s' y y :=
       match p with
       | spaths_refl s x => (spaths_refl _ x, (VSet.empty; spaths_refl _ x))
       | spaths_step s s' x0 y0 z0 H e p0
-        => match V.eq_dec x y with
-          | left pp => (spaths_refl _ x0, (_; p))
-          | right pp => (spaths_step _ e (split p0).1, (split p0).2)
+        => match V.eq_dec x0 z0 with
+          | left pp => (eq_rect _ (SimplePaths _ _) (spaths_refl _ _) _ pp,
+                       (s'; eq_rect _ (fun x => SimplePaths _ x _)
+                                    (spaths_step H e p0) _ pp))
+          | right pp => (spaths_step (DisjointAdd_remove H pp) e (split p0).1,
+                        (split p0).2)
           end
       end.
-   Next Obligation.
-     now apply DisjointAdd_remove.
-   Defined.
  
-    Program Fixpoint simplify {s x y} (q : Paths y x)
+    Fixpoint simplify {s x y} (q : Paths y x)
       : SimplePaths s x y -> ∑ x' s', SimplePaths s' x' x' :=
       match q with
       | paths_refl x => fun p => (x; s; p)
       | paths_step y y' _ e q =>
-        fun p => match VSet.mem y s with
-              | true => let '(p1, p2) := split p in
+        fun p => match VSet.mem y s as X return VSet.mem y s = X -> _ with
+              | true => fun XX => let '(p1, p2) := split p in
                        if 0 <? sweight (p2..2) then (_; p2)
-                       else simplify q (@add_end _ _ _ p1 _ e _)
-              | false => @simplify _ _ _ q (@add_end _ _ _ p _ e _)
-              end
+                       else simplify q
+                                  (add_end p1 e (VSetProp.FM.remove_1 eq_refl))
+              | false => fun XX => simplify q (add_end p e
+                                  ((VSetFact.not_mem_iff _ _).2 XX))
+              end eq_refl
       end.
-    Next Obligation.
-      apply VSetProp.FM.remove_1; reflexivity.
-    Defined.
-    Next Obligation.
-      now apply VSetFact.not_mem_iff.
-    Defined.
 
-    Import Nbar.
 
-    (* Definition preds (y : V.t) : list (V.t * nat) *)
-    (*   := let l := List.filter (fun e => V.eq_dec e..t y) (EdgeSet.elements (E G)) in *)
-    (*      List.map fst l. *)
-
-    (* (* lsp = longest simple path *) *)
-    (* (* l is the list of authorized intermediate nodes *) *)
-    (* (* lsp0 (a::l) x y = max (lsp0 l x y) (lsp0 l x a + lsp0 l a y) *) *)
-    (* Program Fixpoint lsp0 (s : VSet.t) (x z : V.t) {measure (VSet.cardinal s)} *)
-    (*   : Nbar.t := *)
-    (*   let base := if V.eq_dec x z then Some 0 else None in *)
-    (*   List.fold_left *)
-    (*     (fun m '(y, n) => match VSet.mem y s with *)
-    (*                    | true => Nbar.max m (Some n + lsp0 (VSet.remove y s) x y)%nbar *)
-    (*                    | false => m end) *)
-    (*     (preds z) base. *)
+    (* Program Fixpoint simplify {s x y} (q : Paths y x) *)
+    (*   : SimplePaths s x y -> ∑ x' s', SimplePaths s' x' x' := *)
+    (*   match q with *)
+    (*   | paths_refl x => fun p => (x; s; p) *)
+    (*   | paths_step y y' _ e q => *)
+    (*     fun p => match VSet.mem y s with *)
+    (*           | true => let '(p1, p2) := split p in *)
+    (*                    if 0 <? sweight (p2..2) then (_; p2) *)
+    (*                    else simplify q (@add_end _ _ _ p1 _ e _) *)
+    (*           | false => @simplify _ _ _ q (@add_end _ _ _ p _ e _) *)
+    (*           end *)
+    (*   end. *)
     (* Next Obligation. *)
-    (*   symmetry in Heq_anonymous; apply VSet.mem_spec in Heq_anonymous. *)
-    (*   apply VSetProp.remove_cardinal_1 in Heq_anonymous. lia. *)
+    (*   apply VSetProp.FM.remove_1; reflexivity. *)
+    (* Defined. *)
+    (* Next Obligation. *)
+    (*   now apply VSetFact.not_mem_iff. *)
     (* Defined. *)
 
-    (* Lemma lsp0_eq s x z : lsp0 s x z = *)
-    (*   let base := if V.eq_dec x z then Some 0 else None in *)
-    (*   List.fold_left *)
-    (*     (fun m '(y, n) => match VSet.mem y s with *)
-    (*                    | true => Nbar.max m (Some n + lsp0 (VSet.remove y s) x y)%nbar *)
-    (*                    | false => m end) *)
-    (*     (preds z) base. *)
-    (* Proof. *)
-    (* Admitted. *)
+    Lemma weight_split {s x y} (p : SimplePaths s x y)
+      : sweight (split p).1 + sweight (split p).2..2 = sweight p.
+    Proof.
+      induction p.
+      - reflexivity.
+      - simpl. destruct (V.eq_dec x z).
+        + destruct e0; cbn. reflexivity.
+        + cbn. lia.
+    Qed.
+
+    Lemma weight_simplify {s x y} q (p : SimplePaths s x y)
+      : 0 < weight q \/ 0 < sweight p -> 0 < sweight (simplify q p)..2..2.
+    Proof.
+      revert p; induction q.
+      - cbn. intuition.
+      - intros p H; cbn in H. simpl.
+        set (F := proj2 (VSetFact.not_mem_iff s x)); clearbody F.
+        destruct (VSet.mem x s).
+        + case_eq (split p); intros p1 p2 Hp.
+          case_eq (0 <? sweight p2..2); intro eq.
+          cbn. apply PeanoNat.Nat.leb_le in eq. lia.
+          admit.
+        + eapply (IHq (add_end p e (F (erefl false)))).
+          eapply IHq.
+        destruct X.
+
+
+        clearbody eq; change (VSet.mem x s = X) in eq.
+        case X. clearbody X.
+        pose proof (Sumbool.sumbool_of_bool X) as XX; destruct XX as [XX|XX].
+        rewrite XX.
+
+
+
+    Import Nbar.
 
     Definition succs (x : V.t) : list (nat * V.t)
       := let l := List.filter (fun e => V.eq_dec e..s x) (EdgeSet.elements (E G)) in
