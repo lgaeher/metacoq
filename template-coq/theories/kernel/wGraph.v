@@ -3,8 +3,6 @@ Require Import Peano_dec Nat Bool List Structures.Equalities Lia
 Require Import ssrbool ssrfun.
 From Template Require Import utils monad_utils.
 
-Axiom myadmit : forall {A}, A.
-
 Definition fst_eq {A B} {x x' : A} {y y' : B}
   : (x, y) = (x', y') -> x = x'.
 Proof.
@@ -17,36 +15,11 @@ Proof.
   inversion 1; reflexivity.
 Qed.
 
-Inductive on_Some {A} (P : A -> Prop) : option A -> Prop :=
-| on_some : forall x, P x -> on_Some P (Some x).
-
-Lemma on_Some_spec {A} (P : A -> Prop) z :
-  on_Some P z <-> exists x, z = Some x /\ P x.
+Lemma InAeq_In {A} (l : list A) x :
+  InA eq x l <-> In x l.
 Proof.
-  split. intros []. now eexists.
-  intros [? [e ?]]. subst. now constructor.
-Qed.
-
-Inductive on_Some_or_None {A} (P : A -> Prop) : option A -> Prop :=
-| on_some' : forall x, P x -> on_Some_or_None P (Some x)
-| or_none : on_Some_or_None P None.
-
-Lemma on_Some_or_None_spec {A} (P : A -> Prop) z :
-  on_Some_or_None P z <-> z = None \/ on_Some P z.
-Proof.
-  split. intros []. right; now constructor. left; reflexivity.
-  intros [|[]]; subst; now constructor.
-Qed.
-
-Fixpoint filter_pack {A} (P : A -> Prop) (HP : forall x, {P x} + {~ P x})
-         (l : list A) {struct l} : list {x : A & P x} :=
-  match l with
-  | nil => nil
-  | x :: l => match HP x with
-             | left p => (existT _ _ p) :: (filter_pack P HP l)
-             | right _ => filter_pack P HP l
-             end
-  end.
+  etransitivity. eapply InA_alt. firstorder. now subst.
+Defined.
 
 Lemma fold_max_In n m l (H : fold_left max l n = m)
   : n = m \/ In m l.
@@ -75,7 +48,7 @@ Proof.
   eexists. split. eassumption. reflexivity.
 Qed.
 
-Definition is_Some {A} (x : option A) := exists a, x = Some a.
+(* Definition is_Some {A} (x : option A) := exists a, x = Some a. *)
 
 Definition eq_max n m k : max n m = k -> n = k \/ m = k.
   intro; lia.
@@ -124,49 +97,49 @@ Module Nbar.
     intros [x|] [y|] [z|]; cbn; intuition.
   Defined.
 
-  Definition is_finite (n : t) := is_Some n.
-  Definition is_finite_max (n m : t)
-    : is_finite (max n m) <-> is_finite n \/ is_finite m.
-  Proof.
-    split.
-    - destruct n, m; cbn; intros [k e]; try discriminate.
-      apply some_inj, eq_max in e.
-      destruct e; [left|right]; eexists; f_equal; eassumption.
-      left; eexists; reflexivity.
-      right; eexists; reflexivity.
-    - intros [H|H].
-      destruct H as [n' e]; rewrite e; cbn.
-      destruct m; eexists; reflexivity.
-      destruct H as [m' e]; rewrite e; cbn.
-      destruct n; eexists; reflexivity.
-  Defined.
-  Definition is_finite_add (n m : t)
-    : is_finite (n + m) <-> is_finite n /\ is_finite m.
-  Proof.
-    split.
-    - destruct n, m; cbn; intros [k e]; try discriminate.
-      split; eexists; reflexivity.
-    - intros [[n1 e1] [n2 e2]]; rewrite e1, e2.
-      eexists; reflexivity.
-  Defined.
+  (* Definition is_finite (n : t) := is_Some n. *)
+  (* Definition is_finite_max (n m : t) *)
+  (*   : is_finite (max n m) <-> is_finite n \/ is_finite m. *)
+  (* Proof. *)
+  (*   split. *)
+  (*   - destruct n, m; cbn; intros [k e]; try discriminate. *)
+  (*     apply some_inj, eq_max in e. *)
+  (*     destruct e; [left|right]; eexists; f_equal; eassumption. *)
+  (*     left; eexists; reflexivity. *)
+  (*     right; eexists; reflexivity. *)
+  (*   - intros [H|H]. *)
+  (*     destruct H as [n' e]; rewrite e; cbn. *)
+  (*     destruct m; eexists; reflexivity. *)
+  (*     destruct H as [m' e]; rewrite e; cbn. *)
+  (*     destruct n; eexists; reflexivity. *)
+  (* Defined. *)
+  (* Definition is_finite_add (n m : t) *)
+  (*   : is_finite (n + m) <-> is_finite n /\ is_finite m. *)
+  (* Proof. *)
+  (*   split. *)
+  (*   - destruct n, m; cbn; intros [k e]; try discriminate. *)
+  (*     split; eexists; reflexivity. *)
+  (*   - intros [[n1 e1] [n2 e2]]; rewrite e1, e2. *)
+  (*     eexists; reflexivity. *)
+  (* Defined. *)
 
-  Definition is_pos (n : t) := Some 1 <= n.
-  Definition is_pos_max (n m : t)
-    : is_pos (max n m) -> is_pos n \/ is_pos m.
-  Proof.
-    destruct n, m; cbn; intuition. lia.
-  Defined.
-  Definition is_pos_add (n m : t)
-    : is_pos (n + m) -> is_pos n \/ is_pos m.
-  Proof.
-    destruct n, m; cbn; intuition. lia.
-  Defined.
+  (* Definition is_pos (n : t) := Some 1 <= n. *)
+  (* Definition is_pos_max (n m : t) *)
+  (*   : is_pos (max n m) -> is_pos n \/ is_pos m. *)
+  (* Proof. *)
+  (*   destruct n, m; cbn; intuition. lia. *)
+  (* Defined. *)
+  (* Definition is_pos_add (n m : t) *)
+  (*   : is_pos (n + m) -> is_pos n \/ is_pos m. *)
+  (* Proof. *)
+  (*   destruct n, m; cbn; intuition. lia. *)
+  (* Defined. *)
 
-  Definition is_pos_is_finite n : is_pos n -> is_finite n.
-  Proof.
-    destruct n; cbn; [|intuition].
-    destruct n. lia. intros _. eexists; reflexivity.
-  Qed.
+  (* Definition is_pos_is_finite n : is_pos n -> is_finite n. *)
+  (* Proof. *)
+  (*   destruct n; cbn; [|intuition]. *)
+  (*   destruct n. lia. intros _. eexists; reflexivity. *)
+  (* Qed. *)
 
   Definition add_assoc n m p : n + (m + p) = n + m + p.
   Proof.
@@ -391,7 +364,7 @@ Module WeightedGraph (V : UsualOrderedType).
     Global Instance Paths_trans : CRelationClasses.Transitive Paths := @concat.
 
 
-    Definition invariants :=
+    Class invariants := mk_invariant :
       (* E ⊆ V × V *)
       (forall e, EdgeSet.In e (E G) -> VSet.In e..s (V G) /\ VSet.In e..t (V G))
       (* s ∈ V *)
@@ -923,12 +896,6 @@ Module WeightedGraph (V : UsualOrderedType).
         intros [m z]; cbn. erewrite IHn.
         reflexivity. now eapply VSetFact.remove_m.
     Qed.
-
-    Lemma InAeq_In {A} (l : list A) x :
-      InA eq x l <-> In x l.
-    Proof.
-      etransitivity. eapply InA_alt. firstorder. now subst.
-    Defined.
     
     Lemma lsp0_spec_le {s x y} (p : SimplePaths s x y)
       : (Some (sweight p) <= lsp0 s x y)%nbar.
@@ -1280,54 +1247,23 @@ Module WeightedGraph (V : UsualOrderedType).
     (*   apply acyclic_wf_no_loop. *)
     (* Defined. *)
 
-    Lemma is_acyclic_correct : reflect acyclic_no_loop is_acyclic.
+    Lemma is_acyclic_spec : is_acyclic <-> acyclic_no_loop.
     Proof.
-      eapply reflect_logically_equiv. eapply acyclic_caract2.
-      apply VSet_Forall_reflect; intro x.
-      destruct (lsp x x). destruct n. constructor; reflexivity.
-      all: constructor; discriminate.
+      symmetry. etransitivity. eapply acyclic_caract2.
+      etransitivity. 2: eapply VSetFact.for_all_iff.
+      2: now intros x y [].
+      apply iff_forall; intro x.
+      apply iff_forall; intro Hx.
+      destruct (lsp x x). destruct n. all: split; congruence.
     Qed.
 
-    (* Context {HG : acyclic_no_loop}. *)
-
-    (* Lemma big {n x y} : *)
-    (*   (forall p : Paths x y, weight p < n) -> exists l, correct_labelling l /\ l x + n > l y. *)
-    (* Admitted. *)
-
-    (* Lemma leq_vertices_caract1 {n x y} : *)
-    (*   leq_vertices n x y <-> exists (p : Paths x y), weight p >= n. *)
+    (* Lemma is_acyclic_correct : reflect acyclic_no_loop is_acyclic. *)
     (* Proof. *)
-    (*   split. *)
-    (*   - intro H. case_eq (lsp x y). *)
-    (*     + intros m Hm. *)
-    (*       destruct (lsp0_spec_eq m Hm) as [p Hp]. *)
-    (*       destruct (Compare_dec.le_lt_dec n m). *)
-    (*       * exists (to_paths p). rewrite <- sweight_weight; lia. *)
-    (*       *  *)
-
-    (*   - intros [p Hp] l Hl. *)
-    (*     pose proof (correct_labelling_Paths l Hl _ _ p). lia. *)
-    (* Admitted. *)
-
-    (* Lemma lsp0_VSet_Subset {s s' x y} : *)
-    (*   VSet.Subset s s' -> (lsp0 s x y <= lsp0 s' x y)%nbar. *)
-    (* Proof. *)
-    (*   intro Hs; unfold lsp0. *)
-    (*   pose proof (VSetProp.subset_cardinal Hs) as Hn. *)
-    (*   set (n := VSet.cardinal s) in *; clearbody n. *)
-    (*   set (n' := VSet.cardinal s') in *; clearbody n'. *)
-    (*   revert n' Hn x y s s' Hs. induction n. *)
-    (*   - intros n' Hn x y s s' Hs. cbn. admit. *)
-    (*   - cbn. intros n' Hn x y s s' Hs. *)
-    (*     destruct n' as [|n']; [lia|cbn]. *)
-    (*     case_eq (VSet.mem x s); intro Hx. *)
-    (*     + assert (VSet.mem x s' = true) by admit. rewrite H. *)
-    (*       admit. *)
-    (*     + destruct (VSet.mem x s'). *)
-    (*       * admit. *)
-    (*       * reflexivity. *)
-    (* Admitted. *)
-
+    (*   eapply reflect_logically_equiv. eapply acyclic_caract2. *)
+    (*   apply VSet_Forall_reflect; intro x. *)
+    (*   destruct (lsp x x). destruct n. constructor; reflexivity. *)
+    (*   all: constructor; discriminate. *)
+    (* Qed. *)
   End graph.
 
   Section graph2.
@@ -1429,7 +1365,7 @@ Module WeightedGraph (V : UsualOrderedType).
         pose proof (lsp0_spec_le G' (spaths_refl G' (V G') x)) as H; cbn in H.
         case_eq (lsp0 G' (V G) x x); [|intro e; rewrite e in H; cbn in H; lia].
         intros m Hm. unfold lsp; cbn; rewrite Hm.
-        apply lsp0_spec_eq in Hm; [|exact _].
+        apply lsp0_spec_eq in Hm.
         destruct Hm as [p Hp]. subst.
         pose proof (from_G'_weight p) as XX.
         destruct (from_G' p).
@@ -1449,7 +1385,7 @@ Module WeightedGraph (V : UsualOrderedType).
           apply EdgeSet.add_spec; now right. }
         specialize (Hle _ XX); clear XX; cbn in Hle.
         assert (XX: (Some K <= lsp G' (s G) x_0)%nbar). {
-          etransitivity. shelve. unshelve eapply lsp0_spec_le; [|exact _].
+          etransitivity. shelve. unshelve eapply lsp0_spec_le.
           unshelve econstructor. 5: reflexivity. exact (VSet.remove (s G) (V G')).
           apply DisjointAdd_remove1. apply HI.
           exists K. apply EdgeSet.add_spec; now left.

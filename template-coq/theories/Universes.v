@@ -1,5 +1,6 @@
-Require Import Ascii String ZArith List utils.
+Require Import Ascii String ZArith List Bool utils.
 Require FSets.FSetWeakList FSets.FMapWeakList MSets.MSetWeakList.
+Require Import config.
 Import ListNotations.
 
 Module Level.
@@ -334,13 +335,13 @@ Definition val0 (v : valuation) (l : Level.t) : Z :=
   match l with
   | lProp => -1
   | lSet => 0
-  | Level s => Zpos (v.(valuation_mono) s)
+  | Level s => Z.of_nat (Pos.to_nat (v.(valuation_mono) s))
   | Var x => Z.of_nat (v.(valuation_poly) x)
   end.
 
 Definition val1 v (e : Universe.Expr.t) : Z :=
   let n := val0 v (fst e) in
-  if snd e then n + 1 else n.
+  if snd e && negb (is_prop (fst e)) then n + 1 else n.
 
 Definition val (v : valuation) (u : universe) : Z :=
   match u with
@@ -359,16 +360,13 @@ Definition satisfies v : constraints -> Prop :=
 Definition consistent ctrs := exists v, satisfies v ctrs.
 
 Definition eq_universe0 (φ : constraints) u u' :=
-  forall v : valuation, satisfies v φ -> val v u = val v u'.
+  forall v, satisfies v φ -> val v u = val v u'.
 
-Definition leq_universe0 (φ : constraints) u u' :=
-  forall v : valuation, satisfies v φ -> (val v u <= val v u')%Z.
+Definition leq_universe_n n (φ : constraints) u u' :=
+  forall v, satisfies v φ -> (Z.of_nat n + val v u <= val v u')%Z.
 
-Definition lt_universe (φ : constraints) u u' :=
-  forall v : valuation, satisfies v φ -> (val v u < val v u')%Z.
-
-
-Require Import config.
+Definition leq_universe0 := leq_universe_n 0.
+Definition lt_universe := leq_universe_n 1.
 
 Definition eq_universe `{checker_flags} φ u u'
   := if check_univs then eq_universe0 φ u u' else True.
@@ -376,6 +374,8 @@ Definition eq_universe `{checker_flags} φ u u'
 Definition leq_universe `{checker_flags} φ u u'
   := if check_univs then leq_universe0 φ u u' else True.
 
+
+(** **** Lemmas about eq and leq **** *)
 
 Lemma eq_universe0_refl φ s : eq_universe0 φ s s.
 Proof.
@@ -398,7 +398,6 @@ Proof.
   unfold leq_universe; destruct check_univs;
     [apply leq_universe0_refl|constructor].
 Qed.
-
 
 Lemma val_cons v e s
   : val v (NEL.cons e s) = Z.max (val1 v e) (val v s).
