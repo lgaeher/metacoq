@@ -27,7 +27,6 @@ theories/config.v
 theories/Universes.v
 theories/BasicAst.v
 theories/Environment.v
-theories/Declarations.v
 theories/Ast.v
 theories/AstUtils.v
 theories/Reflect.v

@@ -90,6 +90,111 @@ Fixpoint remove_arity (n : nat) (t : term) : term :=
           end
   end.
 
+(** Inductives *)
+Definition sort := Universe.t.
+
+(* In Coq kernel speak, an arity is the type of an inductive without the parameters (i.e. what comes after the colon when writing down the inductive) *)
+Record inductive_arity := {
+  ind_user_arity : term; (* the full arity *)
+  ind_sort : sort        (* just the sort *)
+}.
+
+Fixpoint ind_get_sort (arity : term) : sort := 
+  match arity with 
+  | tSort s => s
+  | tLetIn _ _ _ t => ind_get_sort t
+  | tProd _ _ t => ind_get_sort t
+  | _ => Universe.lProp (* TODO: this is an error *)
+  end.
+
+(* decompose a term prefixed by prods/lets into the context given by the declarations and the remaining term *)
+Definition decompose_let_prod_env (t : term) : context * term := 
+  let decomp := fix decomp (t : term) (acc : context) := 
+    match t with 
+    | tProd na ty t => 
+        decomp t (mkdecl na None ty :: acc)
+    | tLetIn na def ty t => 
+        decomp t (mkdecl na (Some def) ty :: acc)
+    | _ => (acc, t)
+    end
+  in decomp t []. 
+
+(* decompose the type of an inductive into the parameter context (parameters) and the arity *)
+Definition decompose_arity (t : term) (nparams : nat) : context * inductive_arity.
+pose (typ := decompose_prod t).
+destruct typ as [[names types] ar].
+apply (List.firstn nparams) in names.
+apply (List.firstn nparams) in types.
+split.
+refine (List.rev (map (fun '(x, ty) => vass x ty) (combine names types))). 
+constructor.
+exact ar. exact (ind_get_sort ar). 
+Defined. 
+
+Inductive test : nat -> let a := 1 in nat -> Type := .  
+
+(*mutual_inductive_body*)
+Definition mind_specif := mutual_inductive_body * one_inductive_body. 
+
+(** Arity sort and original user arity Ui*)
+Definition ind_arity (i : mind_specif) := 
+  let (mib, oib) := i in 
+  snd (decompose_arity (oib.(ind_type)) mib.(ind_npars)). 
+Definition param_ctxt (i : mind_specif) := 
+  let (mib, oib) := i in 
+  fst (decompose_arity (oib.(ind_type)) mib.(ind_npars)). 
+
+Definition user_arity_ctxt (user_arity : term) := 
+  fst (decompose_let_prod_env user_arity).
+
+(** Arity context of [Ii] with parameters: [forall params, Ui] *)
+(* NOTE: does also contain lets and indices! *)
+Definition ind_arity_ctxt (i : mind_specif) := 
+  let (mib, oib) := i in 
+  let (param_ctx, ar) := (decompose_arity oib.(ind_type) mib.(ind_npars)) in
+  (user_arity_ctxt (ar.(ind_user_arity))) ++ param_ctx. 
+
+
+(** Names of the constructors: [cij] *)
+Definition ind_consnames (i : mind_specif) := 
+  map (fun '(na, _, _) => na) (snd i).(ind_ctors). 
+
+(** Types of the constructors with parameters:  [forall params, Tij],
+     where the Ik are replaced by de Bruijn index in the
+     context I1:forall params, U1 ..  In:forall params, Un *)
+Definition ind_user_lc (i : mind_specif) : list term := 
+  map (fun '(_, ty, _) => ty) (snd i).(ind_ctors).
+
+(* Number of expected real arguments of the type (no let, no params), i.e. indices *)
+Definition ind_nrealargs (i : mind_specif) : nat := 
+  let user_arity := (ind_arity i).(ind_user_arity) in
+  let count_nonlets := fix r (t : term) := 
+    match t with 
+    | tLetIn _ _ _ t => r t
+    | tProd _ _ t => 1 + r t
+    | _ => 1
+    end
+  in count_nonlets user_arity. 
+
+(* length of realargs context (with let, no params), i.e. indices + lets *)
+Definition ind_nrealdecls (i : mind_specif) := 
+  let (mib, oib) := i in
+  let (_, ar) := decompose_arity oib.(ind_type) mib.(ind_npars) in
+  length (user_arity_ctxt (ar.(ind_user_arity))). 
+
+(* number of expected real arguments of constructors (without params, without lets) *)
+Definition ind_ctors_nrealargs (i : mind_specif) : list nat := 
+  map (fun '(_, _, n) => n) (snd i).(ind_ctors). 
+
+(* length of the signature of the constructors (with let, without params) *)
+Definition ind_ctors_nrealdecls (i : mind_specif) : list nat := 
+  let (mib, oib) := i in 
+  let npars := mib.(ind_npars) in 
+  map (fun '(_, ty, _) => 
+    let (_, ar) := decompose_arity ty npars in length (user_arity_ctxt ar.(ind_user_arity)))
+  oib.(ind_ctors).
+
+
 (* TODO factorize in Environment *)
 (* was mind_decl_to_entry *)
 Definition mind_body_to_entry (decl : mutual_inductive_body)
@@ -104,14 +209,10 @@ Proof.
             mind_entry_private := None |}.
   - (* FIXME: this is wrong, the info should be in ind_params *)
    refine (match List.hd_error decl.(ind_bodies) with
-  | Some i0 => List.rev _
+  | Some i0 => _
   | None => nil (* assert false: at least one inductive in a mutual block *)
   end).
-  pose (typ := decompose_prod i0.(ind_type)).
-destruct typ as [[names types] _].
-apply (List.firstn decl.(ind_npars)) in names.
-apply (List.firstn decl.(ind_npars)) in types.
-  refine (map (fun '(x, ty) => vass x ty) (combine names types)).
+  apply (param_ctxt (decl, i0)). 
   - refine (List.map _ decl.(ind_bodies)).
     intros [].
     refine {| mind_entry_typename := ind_name;

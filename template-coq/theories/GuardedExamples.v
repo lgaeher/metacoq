@@ -512,3 +512,75 @@ Fail Fixpoint size' (t : rosetree X) : nat :=
 (*** something with let? *)
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(* output from coq repr on a few inductives *)
+
+
+
+(* nrealargs = 0, nrealdecls = 1 *)
+(* arityctxt = 
+        [LocalDef
+          ({Context.binder_name = Names.Name.Name a;
+                        binder_relevance = Sorts.Relevant},
+                                  (CSTR.nat._0._2 CSTR.nat._0._1), nat)]*)
+Inductive testI : let a := 1 in Type := a.
+Fixpoint d (t : testI) := match t with | a => 1 end. 
+
+(* nrealargs = 1, nrealdecls = 3 *)
+(* consnrealargs = consnrealdecls = [0] *)
+(* arityctxt = 
+[LocalDef
+          ({Context.binder_name = Names.Name.Name b;
+            binder_relevance = Sorts.Relevant},
+          (CSTR.nat._0._2 (CSTR.nat._0._2 CSTR.nat._0._1)), nat);
+         LocalAssum
+          ({Context.binder_name = Names.Name.Anonymous;
+            binder_relevance = Sorts.Relevant},
+          nat);
+         LocalDef
+          ({Context.binder_name = Names.Name.Name a;
+            binder_relevance = Sorts.Relevant},
+            (CSTR.nat._0._2 CSTR.nat._0._1), nat)] *)
+Inductive testJ : let a := 1 in nat -> let b := 2 in Type := aJ : testJ 5.
+Fixpoint e n (t : testJ n) := match t with | aJ => 1 end. 
+
+
+
+(* nrealargs = 1, nrealdecls = 3 *)
+(* arity_ctxt = 
+        [LocalDef
+          ({Context.binder_name = Names.Name.Name b;
+            binder_relevance = Sorts.Relevant},
+          (CSTR.nat._0._2 (CSTR.nat._0._2 CSTR.nat._0._1)), nat);
+         LocalAssum
+          ({Context.binder_name = Names.Name.Anonymous;
+            binder_relevance = Sorts.Relevant},
+          nat);
+         LocalDef
+          ({Context.binder_name = Names.Name.Name a;
+            binder_relevance = Sorts.Relevant},
+          (CSTR.nat._0._2 CSTR.nat._0._1), nat);
+         LocalAssum
+          ({Context.binder_name = Names.Name.Name n;
+            binder_relevance = Sorts.Relevant},
+          nat)]
+          *)
+Inductive testK (n : nat) : let a := 1 in nat -> let b := 2 in Type := aK : testK n 5.
+Fixpoint f n (t : testK n n) := match t with | aK _ => 1 end. 

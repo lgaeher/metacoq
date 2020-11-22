@@ -159,7 +159,7 @@ Inductive constant_entry :=
   then, in [i]th block, [mind_entry_params] is [xn:Xn;...;x1:X1];
   [mind_entry_arity] is [Ai], defined in context [x1:X1;...;xn:Xn];
   [mind_entry_lc] is [Ti1;...;Tini], defined in context
-  [A'1;...;A'p;x1:X1;...;xn:Xn] where [A'i] is [Ai] generalized over
+  [A'1;...;A'p;x1:X1;...;xn:Xn] where [A'i] is [Ai] generalized over  (* TODO: I think first the xi should come, then the A'i, judging from AstUtils *)
   [x1:X1;...;xn:Xn].
 *)
 
@@ -168,7 +168,7 @@ Record one_inductive_entry := {
   mind_entry_arity : term;
   mind_entry_template : bool; (* template polymorphism *)
   mind_entry_consnames : list ident;
-  mind_entry_lc : list term (* constructor list *) }.
+  mind_entry_lc : list term (* constructor list*) }.
 
 Record mutual_inductive_entry := {
   mind_entry_record    : option (option ident);
