@@ -43,7 +43,7 @@ Definition lift_context n k (Γ : context) : context :=
 
 (** Parallel substitution: it assumes that all terms in the substitution live in the
     same context *)
-
+(* k = number of binders we're under *)
 Fixpoint subst s k u :=
   match u with
   | tRel n =>

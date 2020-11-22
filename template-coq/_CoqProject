@@ -16,6 +16,7 @@ theories/utils/MCSquash.v
 theories/utils/MCString.v
 theories/utils/wGraph.v
 theories/utils/MCUtils.v
+theories/utils/RTree.v
 
 # common
 theories/common/uGraph.v
@@ -26,6 +27,7 @@ theories/config.v
 theories/Universes.v
 theories/BasicAst.v
 theories/Environment.v
+theories/Declarations.v
 theories/Ast.v
 theories/AstUtils.v
 theories/Reflect.v
