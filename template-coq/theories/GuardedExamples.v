@@ -52,9 +52,7 @@ Fixpoint weird_length {X} (l :list X) :=
 
 End list. 
 
-From MetaCoq.Template Require Import Environment Declarations utils.RTree Ast. 
-Module D := Declarations TemplateTerm. 
-Import D. 
+From MetaCoq.Template Require Import Environment Declarations utils.RTree Ast AstUtils. 
 Open Scope string_scope.
 Require Import List String.
 Import ListNotations.
@@ -82,69 +80,90 @@ Eval cbn in (expand (list_recargs)).
 
 Print one_inductive_body.
 (* I don't really care about universes, just use Set everywhere *)
-Definition typeUniv := Universe.make (Level.lSet). 
-
-Definition list_arity := 
-  {| ind_user_arity := (tSort typeUniv); 
-     ind_sort := typeUniv
-  |}. 
-
-Definition list_arity_ctxt := 
-  [{|
-    decl_name := mkBindAnn (nNamed "X") Relevant;
-    decl_body := None;
-    decl_type := tSort typeUniv
-  |}].
 
 Definition list_indbody : one_inductive_body := 
   {| 
     ind_name := "list";
-    ind_arity := list_arity;
-    ind_arity_ctxt := list_arity_ctxt;
-    ind_consnames := ["nil"; "cons"];
-    ind_ctor_types :=  
-      [ tProd (mkBindAnn (nNamed "X") Relevant) (tSort typeUniv)
-          (tApp (tRel 1) [tRel 0]); (* tRel 1 should refer to the declared inductive *)
-        tProd (mkBindAnn (nNamed "x") Relevant) (tSort typeUniv) 
-          (tProd (mkBindAnn nAnon Relevant) (tRel 0) (* element of type X *)
-            (tProd (mkBindAnn nAnon Relevant) (tApp (tRel 1) [tRel 0]) (* elemnt of type lsit X *)
-              (tApp (tRel 1) [tRel 0])))];  (* return element of type list X *)
-    ind_nrealargs := 0;
-    ind_nrealdecls := 0;
+    ind_type := tProd {| binder_name := nNamed "A"; binder_relevance := Relevant |}
+                      (tSort (Universe.of_levels (inr (Level.Level "Coq.Init.Datatypes.60"))))
+                      (tSort (Universe.from_kernel_repr (Level.lSet, false) [(Level.Level "Coq.Init.Datatypes.60", false)]));
     ind_kelim := InType;
-    ind_ctors_hnf := 
-      (* constructors are already in hnf, so this is the same as the types (but split up) *)
-      [ 
-          (list_arity_ctxt, tApp (tRel 1) [tRel 0]); 
-          (list_arity_ctxt, 
-            (tProd (mkBindAnn nAnon Relevant) (tRel 0) (* element of type X *)
-              (tProd (mkBindAnn nAnon Relevant) (tApp (tRel 1) [tRel 0]) (* elemnt of type lsit X *)
-                (tApp (tRel 1) [tRel 0])))) 
-      ];
-    ind_ctors_nrealargs := [0; 2];
-    ind_ctors_nrealdecls := [0; 2];
-    ind_recargs := list_recargs;
-    ind_relevance := Relevant
-  |}.
+    ind_ctors := [("nil", tProd {|
+                               binder_name := nNamed "A";
+                               binder_relevance := Relevant |}
+                             (tSort
+                                (Universe.of_levels
+                                   (inr
+                                      (Level.Level "Coq.Init.Datatypes.60"))))
+                             (tApp (tRel 1) [tRel 0]), 0);
+                          ("cons",
+                          tProd
+                            {|
+                            binder_name := nNamed "A";
+                            binder_relevance := Relevant |}
+                            (tSort
+                               (Universe.of_levels
+                                  (inr
+                                     (Level.Level "Coq.Init.Datatypes.60"))))
+                            (tProd
+                               {|
+                               binder_name := nAnon;
+                               binder_relevance := Relevant |} 
+                               (tRel 0)
+                               (tProd
+                                  {|
+                                  binder_name := nAnon;
+                                  binder_relevance := Relevant |}
+                                  (tApp (tRel 2) [tRel 1])
+                                  (tApp (tRel 3) [tRel 2]))), 2)];
+               ind_projs := [];
+               ind_relevance := Relevant;
+               ind_recargs := list_recargs |}. 
+
+
 
 (* I don't care about universes. *)
-Context (univdecl : universes_decl). 
+Definition univdecl := Monomorphic_ctx
+                   (LevelSetProp.of_list
+                      [Level.Level "Coq.Init.Datatypes.60"],
+                   ConstraintSet.empty).
 
+
+Definition list_param_ctxt := 
+[{|
+   decl_name := {|
+                binder_name := nNamed "A";
+                binder_relevance := Relevant |};
+   decl_body := None;
+   decl_type := tSort
+                  (Universe.of_levels
+                     (inr (Level.Level "Coq.Init.Datatypes.60"))) |}].
 Definition list_mindbody : mutual_inductive_body := 
   {| 
     ind_bodies := [list_indbody];
     ind_finite := Finite;
-    ind_ntypes := 1;
     ind_npars := 1;
-    ind_npars_unif := 1;
-    ind_params := list_arity_ctxt;
+    (*ind_npars_unif := 1;*)
+    ind_params := list_param_ctxt;
     ind_universes := univdecl;
     ind_variance := None;
   |}.
 
 
-End kernel_lists.
+Compute (ind_arity (list_mindbody, list_indbody)). 
 
+Compute (ind_arity_ctxt (list_mindbody, list_indbody)). 
+Compute (ind_consnames (list_mindbody, list_indbody)).
+Compute (ind_user_lc (list_mindbody, list_indbody)). 
+Compute (ind_nrealargs (list_mindbody, list_indbody)). 
+Compute (ind_nrealdecls (list_mindbody, list_indbody)).
+
+
+Compute (ind_ctors_nrealdecls (list_mindbody, list_indbody)).
+
+(*Compute (mind_body_to_entry list_mindbody).*)
+
+End kernel_lists.
 
 
 

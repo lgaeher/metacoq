@@ -299,36 +299,37 @@ Lemma lift_declared_minductive `{checker_flags} {Σ : global_env} cst decl n k :
   declared_minductive Σ cst decl ->
   lift_mutual_inductive_body n k decl = decl.
 Proof.
-  intros wfΣ Hdecl.
-  pose proof (on_declared_minductive wfΣ Hdecl). apply onNpars in X.
-  apply (declared_inductive_closed (Σ:=(empty_ext Σ))) in Hdecl. auto.
-  move: Hdecl.
-  rewrite /closed_inductive_decl /lift_mutual_inductive_body.
-  destruct decl; simpl.
-  move/andP => [clpar clbodies]. f_equal.
-  now rewrite [fold_context _ _]closed_ctx_lift.
-  eapply forallb_All in clbodies.
-  eapply Alli_mapi_id.
-  eapply (All_Alli clbodies). intros; eauto.
-  2:{ intros. eapply X0. }
-  simpl; intros.
-  move: H0. rewrite /closed_inductive_body.
-  destruct x; simpl. move=> /andP[/andP [ci ct] cp].
-  f_equal. rewrite lift_closed; eauto.
-  eapply closed_upwards; eauto; lia.
-  eapply All_map_id. eapply forallb_All in ct.
-  eapply (All_impl ct). intros x.
-  destruct x as [[id ty] arg]; unfold on_pi2; intros c; simpl; repeat f_equal.
-  apply lift_closed. unfold cdecl_type in c; simpl in c.
-  eapply closed_upwards; eauto; lia.
-  simpl in X. rewrite -X in cp.
-  eapply forallb_All in cp. eapply All_map_id; eauto.
-  eapply (All_impl cp); firstorder auto.
-  destruct x; unfold on_snd; simpl; f_equal.
-  apply lift_closed. rewrite context_assumptions_fold.
-  eapply closed_upwards; eauto; lia.
-  simpl. auto.
-Qed.
+  (*intros wfΣ Hdecl.*)
+  (*pose proof (on_declared_minductive wfΣ Hdecl). apply onNpars in X.*)
+  (*apply (declared_inductive_closed (Σ:=(empty_ext Σ))) in Hdecl. auto.*)
+  (*move: Hdecl.*)
+  (*rewrite /closed_inductive_decl /lift_mutual_inductive_body.*)
+  (*destruct decl; simpl.*)
+  (*move/andP => [clpar clbodies]. f_equal.*)
+  (*now rewrite [fold_context _ _]closed_ctx_lift.*)
+  (*eapply forallb_All in clbodies.*)
+  (*eapply Alli_mapi_id.*)
+  (*eapply (All_Alli clbodies). intros; eauto.*)
+  (*2:{ intros. eapply X0. }*)
+  (*simpl; intros.*)
+  (*move: H0. rewrite /closed_inductive_body.*)
+  (*destruct x; simpl. move=> /andP[/andP [ci ct] cp].*)
+  (*f_equal. rewrite lift_closed; eauto.*)
+  (*eapply closed_upwards; eauto; lia.*)
+  (*eapply All_map_id. eapply forallb_All in ct.*)
+  (*eapply (All_impl ct). intros x.*)
+  (*destruct x as [[id ty] arg]; unfold on_pi2; intros c; simpl; repeat f_equal.*)
+  (*apply lift_closed. unfold cdecl_type in c; simpl in c.*)
+  (*eapply closed_upwards; eauto; lia.*)
+  (*simpl in X. rewrite -X in cp.*)
+  (*eapply forallb_All in cp. eapply All_map_id; eauto.*)
+  (*eapply (All_impl cp); firstorder auto.*)
+  (*destruct x; unfold on_snd; simpl; f_equal.*)
+  (*apply lift_closed. rewrite context_assumptions_fold.*)
+  (*eapply closed_upwards; eauto; lia.*)
+  (*all:simpl; auto.*)
+(*Qed.*)
+Admitted.
 
 Lemma lift_declared_inductive `{checker_flags} Σ ind mdecl idecl n k :
   wf Σ ->

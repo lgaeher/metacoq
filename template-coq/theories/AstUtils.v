@@ -119,9 +119,22 @@ Definition decompose_let_prod_env (t : term) : context * term :=
     end
   in decomp t []. 
 
+
+Fixpoint decompose_prod_n (t : term) (n : nat) : (list aname * list term) * term := 
+  match n with 
+  | 0 => ([], [], t)
+  | S n => 
+      match t with 
+      | tProd na A B => let (nAs, B) := decompose_prod_n B n in
+                  let (ns, As) := nAs in
+                  (na :: ns, A :: As, B)
+      | _ => ([],[], t)
+      end
+  end.
+
 (* decompose the type of an inductive into the parameter context (parameters) and the arity *)
 Definition decompose_arity (t : term) (nparams : nat) : context * inductive_arity.
-pose (typ := decompose_prod t).
+pose (typ := decompose_prod_n t nparams).
 destruct typ as [[names types] ar].
 apply (List.firstn nparams) in names.
 apply (List.firstn nparams) in types.
@@ -162,6 +175,8 @@ Definition ind_consnames (i : mind_specif) :=
 (** Types of the constructors with parameters:  [forall params, Tij],
      where the Ik are replaced by de Bruijn index in the
      context I1:forall params, U1 ..  In:forall params, Un *)
+(* TODO: in the debugger, this does not seem to be what is actually implemented, 
+  so the following definition may not reflect the Coq definition *)
 Definition ind_user_lc (i : mind_specif) : list term := 
   map (fun '(_, ty, _) => ty) (snd i).(ind_ctors).
 
@@ -172,7 +187,7 @@ Definition ind_nrealargs (i : mind_specif) : nat :=
     match t with 
     | tLetIn _ _ _ t => r t
     | tProd _ _ t => 1 + r t
-    | _ => 1
+    | _ => 0
     end
   in count_nonlets user_arity. 
 
@@ -186,13 +201,23 @@ Definition ind_nrealdecls (i : mind_specif) :=
 Definition ind_ctors_nrealargs (i : mind_specif) : list nat := 
   map (fun '(_, _, n) => n) (snd i).(ind_ctors). 
 
+(* count the number of declarations prefixing a term *)
+Fixpoint count_decls (t : term) := 
+  match t with 
+  | tLetIn _ _ _ t => 1 + count_decls t
+  | tProd _ _ t => 1 + count_decls t 
+  | _ => 0
+  end.
+
 (* length of the signature of the constructors (with let, without params) *)
 Definition ind_ctors_nrealdecls (i : mind_specif) : list nat := 
   let (mib, oib) := i in 
   let npars := mib.(ind_npars) in 
   map (fun '(_, ty, _) => 
-    let (_, ar) := decompose_arity ty npars in length (user_arity_ctxt ar.(ind_user_arity)))
+    let (ctx, ar) := decompose_arity ty npars in count_decls ar.(ind_user_arity))
   oib.(ind_ctors).
+
+
 
 
 (* TODO factorize in Environment *)

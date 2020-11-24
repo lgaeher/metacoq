@@ -163,7 +163,12 @@ Module Environment (T : Term).
     ind_params : context;
     ind_bodies : list one_inductive_body ;
     ind_universes : universes_decl;
-    ind_variance : option (list Universes.Variance.t) }.
+    ind_variance : option (list Universes.Variance.t) 
+
+    (* TODO: things of relevance which are currently missing: 
+      - mind_nparams_rec (number of uniform parameters)
+    *)
+  }.
 
   (** See [constant_body] from [declarations.ml] *)
   Record constant_body := {
