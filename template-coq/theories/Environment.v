@@ -323,7 +323,7 @@ Module Environment (T : Term).
   Qed.
 
 
-  Definition arities_context (l : list one_inductive_body) :=
+  Definition arities_context (l : list one_inductive_body) : context :=
     rev_map (fun ind => vass (mkBindAnn (nNamed ind.(ind_name))
                             (ind.(ind_relevance))) ind.(ind_type)) l.
 

@@ -7,7 +7,7 @@ From MetaCoq Require Import utils Ast AstUtils Induction.
   Definition of [closedn] (boolean) predicate for checking if
   a term is closed. *)
 
-
+(* lift all dBs >= k in t by n *)
 Fixpoint lift n k t : term :=
   match t with
   | tRel i => tRel (if Nat.leb k i then n + i else i)
