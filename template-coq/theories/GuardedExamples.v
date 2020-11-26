@@ -52,7 +52,7 @@ Fixpoint weird_length {X} (l :list X) :=
 
 End list. 
 
-From MetaCoq.Template Require Import Environment Declarations utils.RTree Ast AstUtils. 
+From MetaCoq.Template Require Import Environment utils.RTree Ast AstUtils. 
 Open Scope string_scope.
 Require Import List String.
 Import ListNotations.
@@ -166,11 +166,39 @@ Compute (ind_ctors_nrealdecls (list_mindbody, list_indbody)).
 End kernel_lists.
 
 
+Require Import Lia. 
+Lemma A1 (n m : nat) : n > m -> n >= m. 
+Proof. lia. Qed.
+Fixpoint test (n : nat) : forall m, n > m -> n >= m := 
+  fun m H => 
+  match n return forall m, n > m -> n >= m with 
+  | 0 => fun m H => A1 0 m H
+  | S n => fun m (H : S n > m) => let a1 := test n m in A1 (S n) m H
+  end m H.
 
 
+Hypothesis (p : nat -> Prop). 
+Hypothesis (H0 : forall n, p n -> p (S n)). 
+Fixpoint test7 (n : nat) := 
+  fun H =>
+  match n return forall (H: forall m, p m), p n with
+  | 0 => fun H => H 0
+  | S n => fun H => H0 n (test7 n H)
+  end H. 
 
-
-
+Fixpoint test2 (n : nat) : forall m, n > m -> n >= m := 
+  fun m H => 
+  match n return forall m, n > m -> n >= m with 
+  | 0 => fun m H => A1 0 m H
+  | S n => 
+      fun m => 
+        match m return (S n > m -> S n >= m) with 
+        | 0 => fun H => (* 0 >= 0 *) 
+        | S m => fun H => 
+        end
+      
+      fun m (H : S n > m) => let a1 := test n m in A1 (S n) m H
+  end m H.
 
 
 
