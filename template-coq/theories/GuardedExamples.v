@@ -66,6 +66,7 @@ Definition list_indname : inductive :=
    inductive_ind := 0 
   |}.
   
+(* NOTE: the constructor arguments in recargs trees are always without lets and without params! *)
 Definition list_recargs : wf_paths := 
   Rec 0 [ Node (Mrec list_indname) [ Node Norec []; Node Norec [ Node Norec []; 
                                                                  Param 0 1]

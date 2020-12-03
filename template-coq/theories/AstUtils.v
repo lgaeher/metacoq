@@ -175,8 +175,6 @@ Definition ind_consnames (i : mind_specif) :=
 (** Types of the constructors with parameters:  [forall params, Tij],
      where the Ik are replaced by de Bruijn index in the
      context I1:forall params, U1 ..  In:forall params, Un *)
-(* TODO: in the debugger, this does not seem to be what is actually implemented, 
-  so the following definition may not reflect the Coq definition *)
 Definition ind_user_lc (i : mind_specif) : list term := 
   map (fun '(_, ty, _) => ty) (snd i).(ind_ctors).
 
