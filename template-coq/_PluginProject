@@ -1,3 +1,4 @@
+
 -I gen-src
 -Q gen-src MetaCoq.Template
 -R theories MetaCoq.Template
@@ -46,6 +47,10 @@ gen-src/datatypes.mli
 gen-src/decimal.ml
 gen-src/decimal.mli
 gen-src/denoter.ml
+gen-src/listSet.ml
+gen-src/listSet.mli
+gen-src/mCRTree.ml
+gen-src/mCRTree.mli
 gen-src/environment.ml
 gen-src/environment.mli
 gen-src/equalities.ml

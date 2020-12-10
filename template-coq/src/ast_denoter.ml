@@ -49,6 +49,9 @@ struct
   type quoted_global_env = global_env
   type quoted_program = program
 
+  type quoted_wf_paths = Ast0.wf_paths
+  type quoted_recarg = Ast0.recarg
+
   let mkAnon = Ast_quoter.mkAnon
   let mkName = Ast_quoter.mkName
   let mkRel = mkRel

@@ -52,7 +52,7 @@ Fixpoint weird_length {X} (l :list X) :=
 
 End list. 
 
-From MetaCoq.Template Require Import Environment utils.RTree Ast AstUtils. 
+From MetaCoq.Template Require Import Environment utils.RTree Ast AstUtils All. 
 Open Scope string_scope.
 Require Import List String.
 Import ListNotations.
@@ -69,7 +69,7 @@ Definition list_indname : inductive :=
 (* NOTE: the constructor arguments in recargs trees are always without lets and without params! *)
 Definition list_recargs : wf_paths := 
   Rec 0 [ Node (Mrec list_indname) [ Node Norec []; Node Norec [ Node Norec []; 
-                                                                 Param 0 1]
+                                                                 Param 0 0]
                                    ]
         ].
 Eval cbn in (expand (list_recargs)). 
@@ -151,6 +151,115 @@ Definition list_mindbody : mutual_inductive_body :=
   |}.
 
 
+Definition list_entry := (MPfile ["Datatypes"; "Init"; "Coq"], "list", InductiveDecl list_mindbody). 
+
+Require Import List String.
+Import MonadNotation.
+Import ListNotations.
+
+Open Scope string_scope.
+
+
+(* subterm information from branches gets propagated *)
+Fixpoint subterm_match_prop (l : list nat) := 
+  match l with 
+  | [] => [] 
+  | x :: l => x :: subterm_match_prop (match l with [] => l | y :: l => l end) 
+  end.
+
+
+
+(*Definition list_env. *)
+(* explicit instantiation with TemplateMonad as a definition parametric over the monad causes trouble with universe polymorphism *)
+Definition list_iter {X} (f : X -> TemplateMonad unit) (l : list X) : TemplateMonad unit := 
+  List.fold_left (fun (acc : TemplateMonad unit) x => _ <- acc;; f x) l (ret tt).
+
+
+
+Unset Guard Checking.
+(*Set Typeclasses Debug.*)
+(*Check (_ : Monad TemplateMonad). *)
+Fixpoint check_fix_term (Σ : global_env) (Γ : context) (t : term) {struct t} := 
+  match t with 
+  | tFix mfix _ => 
+      (* TODO: we should first recursively check the body of the fix (in case of nested fixpoints!) *)
+      (*tmPrint mfix ;;*)
+      (*tmPrint Σ*)
+      (*ret tt*)
+      (*let Σ := *)
+      catchMap (check_fix Σ Γ mfix) 
+        (fun s => tmPrint s) (fun _ => tmPrint "success")
+  | tCoFix mfix idx =>
+      (* TODO *)
+      ret tt
+  | tLambda na T M => 
+      _ <- check_fix_term Σ Γ T;;
+      _ <- check_fix_term Σ (Γ ,, vass na T) M;;
+      ret tt
+  | tApp u v => 
+      _ <- check_fix_term Σ Γ u;;
+      _ <- list_iter (check_fix_term Σ Γ) v;;
+      ret tt
+  | tProd na A B => 
+      _ <- check_fix_term Σ Γ A;;
+      _ <- check_fix_term Σ (Γ ,, vass na A) B;;
+      ret tt
+  | tCast C kind t => 
+      _ <- check_fix_term Σ Γ C;;
+      _ <- check_fix_term Σ Γ t;;
+      ret tt
+  | tLetIn na b t b' => 
+      _ <- check_fix_term Σ Γ b;;
+      _ <- check_fix_term Σ Γ t;;
+      _ <- check_fix_term Σ (Γ ,, vdef na b t) b';;
+      ret tt
+  | tCase ind rtf discriminant brs =>
+    _ <- check_fix_term Σ Γ rtf;;
+    _ <- check_fix_term Σ Γ discriminant;;
+    _ <- list_iter (fun '(_, b) => check_fix_term Σ Γ b) brs;;
+    ret tt
+  | tProj _ C => 
+      _ <- check_fix_term Σ Γ C;;
+      ret tt
+  | tConst kn u => 
+      match lookup_env_const Σ kn with 
+      | Some const => 
+          match const.(cst_body) with 
+          | Some t => check_fix_term Σ Γ t
+          | _ => ret tt
+          end
+      | None => ret tt
+      end
+  | _ => ret tt 
+      (*tmPrint t;; tmPrint "not a fix" *)
+  end.
+
+Definition check_fix Σ t := check_fix_term Σ [] t. 
+(*Fixpoint check_fix Σ t {struct t} := *)
+  (*match t with *)
+  (*[>| tInd ind _ => <]*)
+      (*[>catchMap (lookup_mind_specif Σ ind) (fun e => tmPrint e) (fun a => tmPrint a)<]*)
+  (*| tConst kn _ => *)
+      (*match lookup_env_const Σ kn with *)
+      (*| Some const => *)
+          (*match const.(cst_body) with *)
+          (*| Some t => *)
+              (*check_fix Σ t*)
+          (*| _ => tmPrint "not a fix 0"*)
+          (*end*)
+      (*| None => tmPrint "not a  fix 1"*)
+      (*end*)
+  (*| _ => check_fix_term Σ [] t*)
+  (*end.*)
+
+
+
+Definition check_fix_start {A} (a : A) :=
+  mlet (Σ, t) <- tmQuoteRec a ;;
+  check_fix (list_entry :: Σ) t.
+MetaCoq Run (check_fix_start app ). 
+
+
 Compute (ind_arity (list_mindbody, list_indbody)). 
 
 Compute (ind_arity_ctxt (list_mindbody, list_indbody)). 
@@ -200,9 +309,6 @@ Fixpoint test2 (n : nat) : forall m, n > m -> n >= m :=
       
       fun m (H : S n > m) => let a1 := test n m in A1 (S n) m H
   end m H.
-
-
-
 
 
 

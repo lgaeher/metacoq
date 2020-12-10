@@ -639,7 +639,7 @@ Proof.
   intros [] []; simpl; constructor; congruence.
 Defined.
 
-Require Import utils.RTree. 
+Require Import utils.MCRTree. 
 Instance reflect_rtree (X : Type) (H: ReflectEq X): ReflectEq (rtree X).
 Proof. 
   refine {| eqb := rtree_eqb eqb |}.  

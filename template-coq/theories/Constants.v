@@ -202,6 +202,17 @@ Register MetaCoq.Template.Ast.global_env as metacoq.ast.global_env.
 Register MetaCoq.Template.Ast.global_env_ext as metacoq.ast.global_env_ext.
 Register MetaCoq.Template.Ast.program as metacoq.ast.program.
 
+Register MetaCoq.Template.Ast.recarg as metacoq.ast.recarg.
+Register MetaCoq.Template.Ast.Norec as metacoq.ast.Norec.
+Register MetaCoq.Template.Ast.Mrec as metacoq.ast.Mrec. 
+Register MetaCoq.Template.Ast.Imbr as metacoq.ast.Imbr. 
+
+Register MetaCoq.Template.utils.MCRTree.rtree as metacoq.ast.rtree.
+Register MetaCoq.Template.utils.MCRTree.Param as metacoq.ast.Param.
+Register MetaCoq.Template.utils.MCRTree.Node as metacoq.ast.Node.
+Register MetaCoq.Template.utils.MCRTree.Rec as metacoq.ast.Rec.
+Register MetaCoq.Template.Ast.wf_paths as metacoq.ast.wf_paths.
+
 (* Template monad *)
 
 Register MetaCoq.Template.TemplateMonad.Common.cbv as metacoq.template.cbv.

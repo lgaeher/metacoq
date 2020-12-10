@@ -36,6 +36,9 @@ sig
   type quoted_mind_finiteness
   type quoted_entry
 
+  type quoted_recarg
+  type quoted_wf_paths
+
   (* Local contexts *)
   type quoted_context_decl
   type quoted_context

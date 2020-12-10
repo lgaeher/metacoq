@@ -1,0 +1,11 @@
+-I /home/lennard/.opam/guardedness2/lib/coq/user-contrib/MetaCoq/Template
+-I /home/lennard/.opam/guardedness2/lib/coq/user-contrib/MetaCoq/Checker
+
+-R . MetaCoq.Guarded
+
+
+Except.v
+Trace.v
+util.v
+Inductives.v
+plugin.v

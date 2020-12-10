@@ -1,6 +1,8 @@
 (* Distributed under the terms of the MIT license. *)
 From MetaCoq.Template Require Import utils Environment.
 From MetaCoq.Template Require Export Universes.
+Export utils.MCRTree.
+
 
 
 (** * AST of Coq kernel terms and kernel data structures
@@ -51,6 +53,7 @@ Inductive term : Type :=
 | tProj (proj : projection) (t : term)
 | tFix (mfix : mfixpoint term) (idx : nat)
 | tCoFix (mfix : mfixpoint term) (idx : nat).
+
 
 Definition mkApps t us :=
   match us with

@@ -178,6 +178,9 @@ Definition ind_consnames (i : mind_specif) :=
 Definition ind_user_lc (i : mind_specif) : list term := 
   map (fun '(_, ty, _) => ty) (snd i).(ind_ctors).
 
+(* head-normalized constructor types so that their conclusion exposes the inductive type -- context contains the arguments (including lets and parameters) *)
+Definition ind_ctors_hnf (i : mind_specif) := map (fun t => decompose_let_prod_env t) (ind_user_lc i).
+
 (* Number of expected real arguments of the type (no let, no params), i.e. indices *)
 Definition ind_nrealargs (i : mind_specif) : nat := 
   let user_arity := (ind_arity i).(ind_user_arity) in

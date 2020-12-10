@@ -1,5 +1,5 @@
 (* Distributed under the terms of the MIT license. *)
-From MetaCoq.Template Require Import utils BasicAst utils.RTree.
+From MetaCoq.Template Require Import utils BasicAst utils.MCRTree.
 From MetaCoq.Template Require Import Universes.
 
 
