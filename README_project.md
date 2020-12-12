@@ -17,10 +17,10 @@
       cd coq-guardedness
       git checkout v8.11 
     ```
-  * Install `conf-findutils`. 
+  * Install `conf-findutils` and `num`.
     ```
      opam repo add coq-released https://coq.inria.fr/opam/released   
-     opam install conf-findutils     
+     opam install conf-findutils num 
     ```
 
   * 
