@@ -15,7 +15,7 @@
     ```
       git clone git@github.com:lgaeher/coq.git coq-guardedness 
       cd coq-guardedness
-      git checkout coq-8.11 
+      git checkout v8.11 
     ```
   * Install `conf-findutils`. 
     ```
