@@ -54,9 +54,9 @@
         cd metacoq-guarded
       ```
   
-  * Build MetaCoq. (the metacoq build process seems rather fragile. for me the following works, we just need `template-coq` and `checker`)
-    `make` and interrupt shortly after to generate right makefiles.
+  * Build MetaCoq. 
     ```
+      ./configure.sh
       cd template-coq
       make -j8
       make install
