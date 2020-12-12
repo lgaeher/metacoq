@@ -71,7 +71,7 @@
       cd guarded
     ```
   
-    You will now have to manually change the path to the checker and template-coq plugins in the `Makefile`, depending on where your opam switch is.
+    You will now have to manually change the path to the checker and template-coq plugins in the `_CoqProject`, depending on where your opam switch is.
     Then:
     ```
       make -j4
