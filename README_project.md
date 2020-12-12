@@ -54,7 +54,7 @@
         cd metacoq-guarded
       ```
   
-  * Build MetaCoq. 
+  * Build MetaCoq. (we need the checker and template-coq plugins)
     ```
       ./configure.sh
       cd template-coq
