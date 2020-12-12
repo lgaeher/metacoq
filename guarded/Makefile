@@ -10,6 +10,9 @@ install: coq # plugin
 	$(MAKE) -f Makefile.coq install
 	# $(MAKE) -f Makefile.plugin install
 
+doc : Makefile.coq
+	$(MAKE) -f Makefile.coq html
+
 uninstall: coq # plugin
 	$(MAKE) -f Makefile.coq uninstall
 	# $(MAKE) -f Makefile.plugin uninstall
