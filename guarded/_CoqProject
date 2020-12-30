@@ -12,5 +12,7 @@ Trace.v
 printers.v
 util.v
 Inductives.v
+guardchecker.v
+positivitychecker.v
 plugin.v
 examples.v
