@@ -17,8 +17,6 @@ theories/utils/MCString.v
 theories/utils/wGraph.v
 theories/utils/MCUtils.v
 
-theories/utils/MCRTree.v
-
 # common
 theories/common/uGraph.v
 

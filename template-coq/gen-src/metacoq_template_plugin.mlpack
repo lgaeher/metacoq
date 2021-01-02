@@ -26,7 +26,6 @@ MSetProperties
 BinNums
 CRelationClasses
 Compare_dec
-RTree
 MCList
 MCRelations
 MCOption

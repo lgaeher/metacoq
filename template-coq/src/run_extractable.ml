@@ -89,9 +89,8 @@ let of_mib (env : Environ.env) (t : Names.MutInd.t) (mib : Plugin_core.mutual_in
       | _ -> [], acc
     in
     let relevance = quote_relevance oib.mind_relevance in
-    let recargs = quote_wf_paths oib.mind_recargs in
     let sf = quote_sort_family oib.mind_kelim in
-    (quote_ident oib.mind_typename, indty, sf, (List.rev reified_ctors), projs, relevance, recargs) :: ls, acc)
+    (quote_ident oib.mind_typename, indty, sf, (List.rev reified_ctors), projs, relevance) :: ls, acc)
         ([],env) (Array.to_list mib.mind_packets)
   in
   let nparams = quote_int mib.mind_nparams in

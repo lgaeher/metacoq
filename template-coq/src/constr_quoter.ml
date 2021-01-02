@@ -3,8 +3,6 @@ open Names
 open Pp
 open Tm_util
 open Quoter
-open Declarations
-open Rtree
 
 
 (** The reifier to Coq values *)
@@ -145,8 +143,7 @@ struct
     match r with
     | Sorts.Relevant -> Lazy.force tRelevant
     | Sorts.Irrelevant -> Lazy.force tIrrelevant
-
- 
+  
   let quote_name n =
     match n with
       Names.Name id -> constr_mkApp (nNamed, [| quote_ident id |])
@@ -338,34 +335,15 @@ struct
     pairl tmodpath tident (quote_modpath (KerName.modpath kn))
       (quote_ident (Label.to_id (KerName.label kn)))
 
-  let quote_inductive0 (i, n) = 
-     let kn = quote_kn (Names.MutInd.canonical i) in
-     let n = quote_int n in
-     quote_inductive (kn, n)
-  let quote_recarg ra =
-    match ra with
-    | Norec -> Lazy.force tNorec
-    | Mrec i -> constr_mkApp (tMrec, [| quote_inductive0 i |])
-    | Imbr i -> constr_mkApp (tImbr, [| quote_inductive0 i |])
-
-  let rec quote_wf_paths (t : wf_paths) : Constr.t = 
-    let quote_children (a : wf_paths list) = 
-      to_coq_list (Lazy.force twf_paths) (List.map quote_wf_paths a)
-    in 
-      match_tree 
-        (fun (i, j) -> constr_mkApp (tParam, [| Lazy.force trecarg; quote_int i; quote_int j |]))
-        (fun (ra, children) -> constr_mkApp (tNode, [| Lazy.force trecarg; quote_recarg ra; quote_children (Array.to_list children) |]))
-        (fun (i, children) -> constr_mkApp (tRec, [| Lazy.force trecarg; quote_int i; quote_children (Array.to_list children) |]))
-        t 
 
   (* useful? *)
   let quote_proj ind pars args =
     pair (prodl tIndTy tnat) (Lazy.force tnat) (pairl tIndTy tnat ind pars) args
 
-  let mk_one_inductive_body (a, b, c, d, e, r, t) =
+  let mk_one_inductive_body (a, b, c, d, e, r) =
     let d = mk_ctor_list d in
     let e = mk_proj_list e in
-    constr_mkApp (tBuild_one_inductive_body, [| a; b; c; d; e ; r; t |])
+    constr_mkApp (tBuild_one_inductive_body, [| a; b; c; d; e ; r |])
 
   let to_coq_option ty f ind =
     match ind with

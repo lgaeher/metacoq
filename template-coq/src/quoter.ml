@@ -101,9 +101,6 @@ sig
   val quote_parameter_entry : t -> quoted_universes_entry -> quoted_parameter_entry
   val quote_constant_entry : (quoted_definition_entry, quoted_parameter_entry) sum -> quoted_constant_entry
 
-  val quote_recarg : Declarations.recarg -> quoted_recarg
-  val quote_wf_paths : Declarations.wf_paths -> quoted_wf_paths
-
   (* val quote_entry : (quoted_constant_entry, quoted_mind_entry) sum option > quoted_entry *)
 
   val quote_context_decl : quoted_aname -> t option -> t -> quoted_context_decl
@@ -113,7 +110,6 @@ sig
                                  * (quoted_ident * t (* constr type *) * quoted_int) list
                                  * (quoted_ident * t (* projection type *)) list
                                  * quoted_relevance 
-                                 * quoted_wf_paths
                                  -> quoted_one_inductive_body
 
   val mk_mutual_inductive_body :
@@ -356,7 +352,7 @@ struct
             | _ -> [], acc
           in
           let sf = Q.quote_sort_family oib.Declarations.mind_kelim in
-	  (Q.quote_ident oib.mind_typename, indty, sf, (List.rev reified_ctors), projs, Q.quote_relevance oib.mind_relevance, Q.quote_wf_paths oib.mind_recargs) :: ls, acc)
+	  (Q.quote_ident oib.mind_typename, indty, sf, (List.rev reified_ctors), projs, Q.quote_relevance oib.mind_relevance) :: ls, acc)
 	  ([],acc) (Array.to_list mib.mind_packets)
       in
       let nparams = Q.quote_int mib.Declarations.mind_nparams in

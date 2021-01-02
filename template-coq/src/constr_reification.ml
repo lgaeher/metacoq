@@ -47,9 +47,6 @@ struct
   type quoted_global_env = Constr.t (* of type Ast.global_env *)
   type quoted_program = Constr.t (* of type Ast.program *)
 
-  type quoted_recarg = Constr.t (* of type Ast.recarg *)
-  type quoted_wf_paths = Constr.t (* of type Ast.wf_paths *)
-
   let resolve (tm : string) : Constr.t Lazy.t =
     lazy (
       let tm_ref = Coqlib.lib_ref tm in
@@ -206,18 +203,6 @@ struct
   let tConstantDecl = ast "ConstantDecl"
   let tInductiveDecl = ast "InductiveDecl"
   let tglobal_env = ast "global_env"
-
-  let trecarg = ast "recarg"
-  let tNorec = ast "Norec"
-  let tMrec = ast "Mrec"
-  let tImbr = ast "Imbr"
-
-  (* rtrees *)
-  let twf_paths = ast "wf_paths"
-  let tParam = ast "Param"
-  let tNode = ast "Node"
-  let tRec = ast "Rec"
-
 
   let (tglobal_reference, tVarRef, tConstRef, tIndRef, tConstructRef) =
     (ast "global_reference", ast "VarRef", ast "ConstRef", ast "IndRef", ast "ConstructRef")

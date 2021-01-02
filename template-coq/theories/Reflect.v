@@ -639,31 +639,10 @@ Proof.
   intros [] []; simpl; constructor; congruence.
 Defined.
 
-Require Import utils.MCRTree. 
-Instance reflect_rtree (X : Type) (H: ReflectEq X): ReflectEq (rtree X).
-Proof. 
-  refine {| eqb := rtree_eqb eqb |}.  
-  intros [] []; unfold rtree_eqb; simpl. 
-  (* TODO *)
-Admitted. 
-
-Definition eqb_recarg (x y : recarg) := 
-  match x, y with 
-  | Norec, Norec => true
-  | Mrec i, Mrec i' => eqb i i'
-  | Imbr i, Imbr i' => eqb i i'
-  | _, _ => false
-  end.
-Instance reflect_recarg : ReflectEq recarg. 
-Proof. 
-  refine {| eqb := eqb_recarg |}. 
-  intros [] []; unfold eqb_recarg; finish_reflect. 
-Defined.
-
 Definition eqb_one_inductive_body (x y : one_inductive_body) :=
-  let (n, t, k, c, p, r, w) := x in
-  let (n', t', k', c', p', r', w') := y in
-  eqb n n' && eqb t t' && eqb k k' && eqb c c' && eqb p p' && eqb r r' && eqb w w'.
+  let (n, t, k, c, p, r) := x in
+  let (n', t', k', c', p', r') := y in
+  eqb n n' && eqb t t' && eqb k k' && eqb c c' && eqb p p' && eqb r r'.
 
 Instance reflect_one_inductive_body : ReflectEq one_inductive_body.
 Proof.

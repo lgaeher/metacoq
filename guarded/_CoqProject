@@ -7,6 +7,7 @@
 
 COQDOCFLAGS = "--charset utf-8 -s --index indexpage"
 
+MCRTree.v
 Except.v
 Trace.v
 printers.v

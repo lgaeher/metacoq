@@ -3,7 +3,6 @@ open Datatypes
 open BasicAst
 open Ast0
 open Tm_util
-open MCRTree
 
 module ExtractedASTBaseQuoter =
 struct
@@ -49,9 +48,6 @@ struct
   type quoted_global_decl = global_decl
   type quoted_global_env = global_env
   type quoted_program = program
-
-  type quoted_recarg = Ast0.recarg
-  type quoted_wf_paths = Ast0.wf_paths
 
   let quote_ident id =
     string_to_list (Id.to_string id)
@@ -211,27 +207,6 @@ struct
 
   let quote_context l = l
 
-  let quote_inductive0 (mind, i) = 
-     let kn = quote_kn (MutInd.canonical mind) in
-     let n = quote_int i in
-     quote_inductive (kn, n)
-
-  let quote_recarg r =
-    match r with 
-    | Declarations.Norec -> Ast0.Norec
-    | Declarations.Mrec i -> Ast0.Mrec (quote_inductive0 i)
-    | Declarations.Imbr i -> Ast0.Imbr (quote_inductive0 i)
-
-  let rec quote_wf_paths (p : Declarations.wf_paths) : quoted_wf_paths = 
-    let quote_children (a : Declarations.wf_paths list) = List.map quote_wf_paths a
-    in 
-      Rtree.match_tree 
-        (fun (i, j) -> Param (quote_int i, quote_int j))
-        (fun (ra, children) -> Node (quote_recarg ra, quote_children (Array.to_list children)))
-        (fun (i, children) -> Rec (quote_int i, quote_children (Array.to_list children)))
-        p 
-
-
   let mkAnon () = Coq_nAnon
   let mkName i = Coq_nNamed i
 
@@ -295,11 +270,11 @@ struct
   let mkMonomorphic_ctx tm = Universes0.Monomorphic_ctx tm
   let mkPolymorphic_ctx tm = Universes0.Polymorphic_ctx tm
 
-  let mk_one_inductive_body (id, ty, kel, ctr, proj, relevance, recargs) =
+  let mk_one_inductive_body (id, ty, kel, ctr, proj, relevance) =
     let ctr = List.map (fun (a, b, c) -> ((a, b), c)) ctr in
     { ind_name = id; ind_type = ty;
       ind_kelim = kel; ind_ctors = ctr;
-      ind_projs = proj; ind_relevance = relevance; ind_recargs = recargs }
+      ind_projs = proj; ind_relevance = relevance }
 
   let mk_mutual_inductive_body finite npars params inds uctx variance =
     {ind_finite = finite;

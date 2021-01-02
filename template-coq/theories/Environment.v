@@ -1,5 +1,5 @@
 (* Distributed under the terms of the MIT license. *)
-From MetaCoq.Template Require Import utils BasicAst utils.MCRTree.
+From MetaCoq.Template Require Import utils BasicAst.
 From MetaCoq.Template Require Import Universes.
 
 
@@ -120,15 +120,6 @@ Module Environment (T : Term).
 
   (** *** Environments *)
 
-  (* Recursive argument labels for representing the recursive structure of constructors of inductive types. *)
-  Inductive recarg := 
-    | Norec                 (* Non-recursive argument *)
-    | Mrec (i : inductive)  (* Recursive argument of type i *)
-    | Imbr (i : inductive). (* Recursive argument of "external" inductive type i, i.e. from another block of mutual inductives *)
-
-  (* the type used to represent the recursion structure of the arguments of constructors *)
-  Definition wf_paths := rtree recarg.
-
   (** See [one_inductive_body] from [declarations.ml]. *)
   Record one_inductive_body := {
     ind_name : ident;
@@ -139,20 +130,17 @@ Module Environment (T : Term).
     ind_projs : list (ident * term); (* names and types of projections, if any.
                                       Type under context of params and inductive object *)
     ind_relevance : relevance; (* relevance of the inductive definition *) 
-
-    ind_recargs : wf_paths (* recursive argument structure (inferred by the positivity checker) *)
   }.
 
   Definition map_one_inductive_body npars arities f (n : nat) m :=
     match m with
-    | Build_one_inductive_body ind_name ind_type ind_kelim ind_ctors ind_projs ind_relevance ind_recargs =>
+    | Build_one_inductive_body ind_name ind_type ind_kelim ind_ctors ind_projs ind_relevance =>
       Build_one_inductive_body ind_name
                                (f 0 ind_type)
                                ind_kelim
                                (map (on_pi2 (f arities)) ind_ctors)
                                (map (on_snd (f (S npars))) ind_projs)
                                ind_relevance
-                               ind_recargs (* TODO: should be fine? *)
     end.
 
 
@@ -164,10 +152,6 @@ Module Environment (T : Term).
     ind_bodies : list one_inductive_body ;
     ind_universes : universes_decl;
     ind_variance : option (list Universes.Variance.t) 
-
-    (* TODO: things of relevance which are currently missing: 
-      - mind_nparams_rec (number of uniform parameters)
-    *)
   }.
 
   (** See [constant_body] from [declarations.ml] *)
