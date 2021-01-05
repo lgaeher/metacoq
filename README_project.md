@@ -1,5 +1,5 @@
 
-### Guardedness checker
+### Guardedness and Positivity checker
 
 ## Installation 
 
@@ -9,35 +9,9 @@
     eval $(opam env)
   ```
 
-2. The quoting of recursive trees relies on a fork of Coq.
-
-  * Clone the repo and switch to the 8.11 branch.
+2. Install Coq
     ```
-      git clone git@github.com:lgaeher/coq.git coq-guardedness 
-      cd coq-guardedness
-      git checkout v8.11 
-    ```
-  * Install `conf-findutils` and `num`.
-    ```
-     opam repo add coq-released https://coq.inria.fr/opam/released   
-     opam install conf-findutils num 
-    ```
-
-  * 
-    Configure with enabled dynamic linking. Please use as prefix the opam switch you just created, e.g.
-    ```
-      ./configure -prefix /home/[user]/.opam/guardedness-mc -natdynlink yes
-    ```
-
-  * Make and make install
-    ```
-      make -j8
-      make install
-    ```
-
-  * Fake the installation of Coq so that opam is happy.
-    ```
-      opam install --fake coq=8.11.2
+      opam install coq=8.11.2
       opam pin add coq 8.11.2
     ```
 
@@ -82,6 +56,8 @@
 
 ## Overview of the files in metacoq/guarded:
 * `Except.v` and `Trace.v` are monads for exception handling and debugging
-* `Inductives.v` is the main implementation of the checker.
+* `Inductives.v` contains preliminaries for inductives.
+* `positivitychecker.v` contains an implementation of the positivity checker.
+* `guardchecker.v` contains an implementation of the guardedness checker.
 * `plugin.v` is the derived checker plugin in the template monad.
 * `examples.v` contains some examples and explanations.
